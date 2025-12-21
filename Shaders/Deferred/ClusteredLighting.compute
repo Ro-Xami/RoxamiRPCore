@@ -1,0 +1,70 @@
+#pragma kernel ClusteredBoxGetLightCulling
+
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+#define _MaxClusteredLightCount 10
+
+RWBuffer<int> _ClusterLightCountBuffer;
+RWBuffer<int> _ClusterLightIndexBuffer;
+
+float4 _CameraPlanes[6];//xyz: plane normal, w: The distance measured from the Plane to the origin, along the Plane's normal.(Squar)
+
+uint4 _ClusteredLightingThreadCount;
+
+uint GetIdFrom3D(uint3 id)
+{
+    return
+        id.x +
+        id.y * _ClusteredLightingThreadCount.x +
+        id.z * _ClusteredLightingThreadCount.x * _ClusteredLightingThreadCount.y;
+}
+
+bool IsOutsidePlane(float4 plane, float3 lightPos, float lightRadius)
+{
+    float dist = dot(plane.xyz, lightPos) + plane.w;
+
+    return dist < -lightRadius;
+}
+
+
+bool IsLightCulling(float3 lightPosition, float lightAttenuation, float4 clusterPlanes[6])
+{
+    for (int i = 0; i < 6; i++)
+    {
+        if(!IsOutsidePlane(clusterPlanes[i] , lightPosition, lightAttenuation)) break;
+        
+        if(i == 6) return true;
+    }
+    return false;
+}
+
+bool IsLightCulling(int lightIndex, uint3 clusterID)
+{
+    half lightAttenuation = _AdditionalLightsAttenuation[lightIndex].z;//light attenuation square
+    float3 lightPosition = _AdditionalLightsPosition[lightIndex].xyz;
+    
+    float4 clusterPlanes[6] = _CameraPlanes;//需要补全，得到Cluster的平面
+    
+    return IsLightCulling(lightPosition, lightAttenuation, clusterPlanes);
+}
+
+[numthreads(8,8,1)]
+void ClusteredBoxGetLightCulling (uint3 id : SV_DispatchThreadID)
+{
+    uint clusterIndex = GetIdFrom3D(id);
+    int clusterLightStart = clusterIndex * _MaxClusteredLightCount;
+    int m_LightCount = 0;
+    
+    UNITY_LOOP
+    for (int lightIndex = 0; lightIndex < GetRoxamiAdditionalLightsCount(); lightIndex++)
+    {
+        if (m_LightCount > _MaxClusteredLightCount) break;
+
+        if (IsLightCulling(lightIndex, id)) continue;
+
+        _ClusterLightIndexBuffer[clusterLightStart + m_LightCount] = lightIndex;
+        m_LightCount += 1;
+    }
+
+    _ClusterLightCountBuffer[clusterIndex] = m_LightCount;
+}
