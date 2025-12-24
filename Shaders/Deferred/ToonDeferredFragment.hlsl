@@ -2,7 +2,9 @@
 #define _TOON_DEFERRED_FRAGMENT
 
 #include_with_pragmas "Packages/com.unity.render-pipelines.universal/Shaders/Utils/StencilDeferred.hlsl"
-#include "Packages/com.unity.render-pipelines.universal/Shaders/Toon/Core/ToonLighting.hlsl"
+#include "Packages/roxamirpcore/Shaders/Core/Common.hlsl"
+#include "Packages/roxamirpcore/Shaders/Core/ToonLighting.hlsl"
+#include "Packages/roxamirpcore/Shaders/Core/ClusteredLightingCore.hlsl"
 
 half4 ToonDeferredShading(Varyings input) : SV_Target
 {
@@ -61,16 +63,46 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
     half4 color = 0;
     color.rgb += LightingToonBased(brdfData, mainLight, inputData);
 
+    uint clusterID = GetIdFormClusterSpace(screen_uv);
+    uint clusteredLightStart = GetClusteredLightStart(clusterID);
+    int clusteredLightCount = GetClusteredLightCount(clusterID);
     UNITY_LOOP
-    for (int addIndex = 0; addIndex < GetRoxamiAdditionalLightsCount(); addIndex++)
+    for (int index = 0; index < clusteredLightCount; index++)
     {
-        Light additionalLight = GetAdditionalPerObjectLight(addIndex, inputData.positionWS);
+        uint clusteredLightIndex = GetClusteredLightIndex(clusteredLightStart + index);
+        Light additionalLight = GetAdditionalPerObjectLight(clusteredLightIndex, inputData.positionWS);
         color.rgb += LightingToonBased(brdfData, additionalLight, inputData);
     }
 
     color.a = 1;
 
     return color;
+}
+
+//===========================================================================//
+//=========================DebugClusterLights================================//
+//===========================================================================//
+half4 DebugClusterLights(Varyings input) : SV_Target
+{
+    UNITY_SETUP_INSTANCE_ID(input);
+    UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+
+    float2 screen_uv = (input.screenUV.xy / input.screenUV.z);
+
+#if defined(SUPPORTS_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
+    float2 undistorted_screen_uv = screen_uv;
+    UNITY_BRANCH if (_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
+    {
+        screen_uv = input.positionCS.xy * _ScreenSize.zw;
+    }
+#endif
+
+    uint clusterID = GetIdFormClusterSpace(screen_uv);
+    uint clusteredLightCount = GetClusteredLightCount(clusterID);
+
+    half3 color = lerp(half3(0, 0, 1), half3(1, 0, 0), (float)clusteredLightCount / (float)_MaxClusterLightIndex);
+
+    return half4(color, 0.85);
 }
 
 #endif

@@ -41,6 +41,7 @@ Shader "Hidden/RoxamiRP/ToonDeferred"
             ZTest NotEqual
             ZWrite Off
             Cull Off
+            Blend One Zero
             Blend One SrcAlpha, Zero One
             BlendOp Add, Add
 
@@ -91,7 +92,42 @@ Shader "Hidden/RoxamiRP/ToonDeferred"
             // -------------------------------------
             // Includes
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/Shaders/Utils/StencilDeferred.hlsl"
-            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/Shaders/Toon/Deferred/ToonDeferredFragment.hlsl"
+            #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
+
+            ENDHLSL
+        }
+
+        // 1 - DebugClusterLights
+        Pass
+        {
+            Name "Debug Cluster Lights"
+
+            ZTest Always
+            ZWrite Off
+            Cull Off
+            
+            Blend SrcAlpha OneMinusSrcAlpha
+
+            HLSLPROGRAM
+            #pragma target 4.5
+
+            // Deferred Rendering Path does not support the OpenGL-based graphics API:
+            // Desktop OpenGL, OpenGL ES 3.0, OpenGL ES 2.0, WebGL 2.0.
+            #pragma exclude_renderers gles gles3 glcore
+
+            // -------------------------------------
+            // Shader Stages
+            #pragma vertex Vertex
+            #pragma fragment DebugClusterLights
+
+            // -------------------------------------
+            // Defines
+            #define _DIRECTIONAL //用于顶点阶段绘制全屏三角形
+
+            // -------------------------------------
+            // Includes
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/Shaders/Utils/StencilDeferred.hlsl"
+            #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
 
             ENDHLSL
         }

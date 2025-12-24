@@ -1,69 +1,71 @@
 #pragma kernel ClusteredBoxGetLightCulling
+#define _USE_RW_BUFFER
 
-#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+#include "Packages/roxamirpcore/Shaders/Core/ToonLighting.hlsl"
+#include "Packages/roxamirpcore/Shaders/Core/ClusteredLightingCore.hlsl"
 
-#define _MaxClusteredLightCount 10
-
-RWBuffer<int> _ClusterLightCountBuffer;
-RWBuffer<int> _ClusterLightIndexBuffer;
-
-float4 _CameraPlanes[6];//xyz: plane normal, w: The distance measured from the Plane to the origin, along the Plane's normal.(Squar)
-
-uint4 _ClusteredLightingThreadCount;
-
-uint GetIdFrom3D(uint3 id)
+bool IntersectCircleAABB(
+    float2 circleCenter,
+    float circleRadius,
+    float2 boxMin,
+    float2 boxMax)
 {
-    return
-        id.x +
-        id.y * _ClusteredLightingThreadCount.x +
-        id.z * _ClusteredLightingThreadCount.x * _ClusteredLightingThreadCount.y;
-}
-
-bool IsOutsidePlane(float4 plane, float3 lightPos, float lightRadius)
-{
-    float dist = dot(plane.xyz, lightPos) + plane.w;
-
-    return dist < -lightRadius;
+    float2 closest = clamp(circleCenter, boxMin, boxMax);
+    float2 delta = circleCenter - closest;
+    return dot(delta, delta) <= circleRadius * circleRadius;
 }
 
 
-bool IsLightCulling(float3 lightPosition, float lightAttenuation, float4 clusterPlanes[6])
+bool IsLightAffectCluster(int lightIndex, float4 box)
 {
-    for (int i = 0; i < 6; i++)
-    {
-        if(!IsOutsidePlane(clusterPlanes[i] , lightPosition, lightAttenuation)) break;
-        
-        if(i == 6) return true;
-    }
-    return false;
-}
+    float3 lightPosWS = _AdditionalLightsPosition[lightIndex].xyz;
 
-bool IsLightCulling(int lightIndex, uint3 clusterID)
-{
-    half lightAttenuation = _AdditionalLightsAttenuation[lightIndex].z;//light attenuation square
-    float3 lightPosition = _AdditionalLightsPosition[lightIndex].xyz;
-    
-    float4 clusterPlanes[6] = _CameraPlanes;//需要补全，得到Cluster的平面
-    
-    return IsLightCulling(lightPosition, lightAttenuation, clusterPlanes);
+    float4 lightCS = TransformWorldToHClip(lightPosWS);
+    // if (lightCS.w <= 0)
+    //     return false; // 在摄像机后面
+
+    float4 lightScr = ComputeScreenPos(lightCS);
+    float2 lightSS = lightScr.xy / lightScr.w;
+
+    float lightRadiusWS = sqrt(1 / _AdditionalLightsAttenuation[lightIndex].x);
+
+    // 投影半径
+    float3 offsetWS = lightPosWS + float3(lightRadiusWS, 0, 0);
+    float4 offsetCS = TransformWorldToHClip(offsetWS);
+    float4 offsetScr = ComputeScreenPos(offsetCS);
+    float2 offsetSS = offsetScr.xy / offsetScr.w;
+
+    float lightRadiusSS = length(offsetSS - lightSS);
+
+    float2 boxMin = float2(box.x, box.z);
+    float2 boxMax = float2(box.y, box.w);
+
+    return IntersectCircleAABB(lightSS, lightRadiusSS, boxMin, boxMax);
 }
 
 [numthreads(8,8,1)]
 void ClusteredBoxGetLightCulling (uint3 id : SV_DispatchThreadID)
 {
-    uint clusterIndex = GetIdFrom3D(id);
-    int clusterLightStart = clusterIndex * _MaxClusteredLightCount;
-    int m_LightCount = 0;
+    uint clusterIndex = GetIdFrom2D(id.xy);
+    _ClusterLightCountBuffer[clusterIndex] = 0;
+
+    float minX = id.x / _ClusterCount.x;
+    float maxX = (id.x + 1) / _ClusterCount.x;
+    float minY = id.y / _ClusterCount.y;
+    float maxY = (id.y + 1) / _ClusterCount.y;
+    float4 box = float4(minX, maxX, minY, maxY);
+
+    uint m_LightCount = 0;
+    uint m_LightStart = clusterIndex * _MaxClusterLightIndex;
     
     UNITY_LOOP
     for (int lightIndex = 0; lightIndex < GetRoxamiAdditionalLightsCount(); lightIndex++)
     {
-        if (m_LightCount > _MaxClusteredLightCount) break;
-
-        if (IsLightCulling(lightIndex, id)) continue;
-
-        _ClusterLightIndexBuffer[clusterLightStart + m_LightCount] = lightIndex;
-        m_LightCount += 1;
+        if (IsLightAffectCluster(lightIndex, box))
+        {
+            _ClusterLightIndexBuffer[m_LightStart + m_LightCount] = lightIndex;
+            m_LightCount += 1;
+        }
     }
 
     _ClusterLightCountBuffer[clusterIndex] = m_LightCount;

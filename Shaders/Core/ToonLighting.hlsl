@@ -5,6 +5,9 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/SurfaceInput.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/UnityGBuffer.hlsl"
 
+int _RoxamiAdditionalLightsCount;
+#define GetRoxamiAdditionalLightsCount() _RoxamiAdditionalLightsCount
+
 Light GetToonDeferredMainLight(float3 posWS, float2 screenUV)
 {
     Light mainLight = GetMainLight();

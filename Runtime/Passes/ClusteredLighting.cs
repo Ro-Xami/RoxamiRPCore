@@ -1,57 +1,65 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 namespace RoxamiRPCore
 {
-    public class ClusteredLightingPass : ScriptableRenderPass
+    [Serializable]
+    public class ClusteredLightingSettings
+    {
+        public bool isActive;
+        public bool isDebug;
+        public ComputeShader computeShader;
+        [Min(5)] public int maxClusterLightIndex = 10;
+        [Range(1, 5)] public int threadGroupX = 10;
+        [Range(1, 5)] public int threadGroupY = 10;
+    }
+    
+    public class ClusteredLightingPass : RoxamiDeferredLights
     {
         public ClusteredLightingPass(ClusteredLightingSettings m_Settings)
         {
             if (m_Settings == null || !m_Settings.computeShader || m_Settings.computeShader.FindKernel(cullingKernelName) < 0)
                 return;
-            
-            renderPassEvent = ClusteredLightingSettings.renderPassEvent;
+
             profilingSampler = new ProfilingSampler(bufferName);
             
             cs = m_Settings.computeShader;
-            cullingKernel = cs.FindKernel(cullingKernelName);
+            clusterCullingKernel = cs.FindKernel(cullingKernelName);
+            maxClusterLightIndex = m_Settings.maxClusterLightIndex;
+            isDebugClusterLights = m_Settings.isDebug;
             
             threadGroupX = m_Settings.threadGroupX;
             threadGroupY = m_Settings.threadGroupY;
-            threadGroupZ = m_Settings.threadGroupZ;
             threadCountX = threadGroupX * numThreadsX;
             threadCountY = threadGroupY * numThreadsY;
-            threadCountZ = threadGroupZ * numThreadsZ;
 
-            int threadCount = threadCountX * threadCountY * threadCountZ;
-            clusterLightCountBuffer = new ComputeBuffer(threadCount, sizeof(int));
-            clusterLightIndexBuffer = new ComputeBuffer(threadCount * maxLightCount, sizeof(int));
+            var clusterLightCountBufferCount = threadCountX * threadCountY;
+            var clusterLightIndexBufferCount = clusterLightCountBufferCount * maxClusterLightIndex;
+            clusterLightCountBuffer = new ComputeBuffer(clusterLightCountBufferCount, sizeof(int));
+            clusterLightIndexBuffer = new ComputeBuffer(clusterLightIndexBufferCount, sizeof(int));
         }
         
         private const string cullingKernelName = "ClusteredBoxGetLightCulling";
-        private const int maxLightCount = 10;
         private const int numThreadsX = 8;
         private const int numThreadsY = 8;
-        private const int numThreadsZ = 1;
         
         private static readonly int clusterLightCountBufferID = Shader.PropertyToID("_ClusterLightCountBuffer");
         private static readonly int clusterLightIndexBufferID = Shader.PropertyToID("_ClusterLightIndexBuffer");
-        private static readonly int threadGroupID = Shader.PropertyToID("_ClusteredLightingThreadCount");
-        private static readonly int cameraPlanesID = Shader.PropertyToID("_CameraPlanes");
+        private static readonly int maxClusterLightIndexID = Shader.PropertyToID("_MaxClusterLightIndex");
+        private static readonly int clusterCountID = Shader.PropertyToID("_ClusterCount");
 
         private readonly ComputeShader cs;
-        private readonly int cullingKernel;
-        private readonly int threadGroupX, threadGroupY, threadGroupZ;
-        private readonly int threadCountX, threadCountY, threadCountZ;
+        private readonly int clusterCullingKernel;
+        private readonly int maxClusterLightIndex;
+        private readonly int threadGroupX, threadGroupY;
+        private readonly int threadCountX, threadCountY;
         private readonly ComputeBuffer clusterLightCountBuffer;
         private readonly ComputeBuffer clusterLightIndexBuffer;
-        
-        enum RoxamiToonDeferredPassInput
-        {
-            ToonLit,
-        }
-        
+
+        private readonly bool isDebugClusterLights = false;
+
         private static Material m_DeferredToonMaterial;
         private static Material DeferredToonMaterial
         {
@@ -64,57 +72,53 @@ namespace RoxamiRPCore
                 return m_DeferredToonMaterial;
             }
         }
-        
-        static readonly int roxamiAdditionalLightsCountID = Shader.PropertyToID("_RoxamiAdditionalLightsCount");
 
         private const string bufferName = "ClusterLighting";
+        private readonly ProfilingSampler profilingSampler;
         private CommandBuffer cmd;
 
-        public override void Configure(CommandBuffer commandBuffer, RenderTextureDescriptor cameraTextureDescriptor)
+        public override bool NeedToExecute()
         {
+            return true;
         }
 
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+        public override void Execute(ScriptableRenderContext context, CommandBuffer commandBuffer, ref RenderingData renderingData)
         {
-            if (!cs || cullingKernel < 0) return;
+            if (!cs || clusterCullingKernel < 0) return;
 
-            cmd = CommandBufferPool.Get(bufferName);
+            cmd = commandBuffer;
             using (new ProfilingScope(cmd, profilingSampler))
             {
-                var planes = GeometryUtility.CalculateFrustumPlanes(renderingData.cameraData.camera);
-                var cameraPlanes = new Vector4[planes.Length];
-                for (int i = 0; i < cameraPlanes.Length; i++)
-                {
-                    cameraPlanes[i] = new Vector4(
-                        planes[i].normal.x, planes[i].normal.y, planes[i].normal.z, planes[i].distance * planes[i].distance);
-                }
+                cmd.SetGlobalFloat(RoxamiShaderConst.roxamiAdditionalLightsCountID, renderingData.lightData.additionalLightsCount);
+                cmd.SetGlobalVector(clusterCountID, new Vector4(threadCountX, threadCountY));
+                cmd.SetGlobalInt(maxClusterLightIndexID, maxClusterLightIndex);
                 
-                cmd.SetComputeVectorArrayParam(cs, cameraPlanesID, cameraPlanes);
-                cmd.SetComputeBufferParam(cs, cullingKernel, clusterLightCountBufferID, clusterLightCountBuffer);
-                cmd.SetComputeBufferParam(cs, cullingKernel, clusterLightIndexBufferID, clusterLightIndexBuffer);
-                cmd.SetComputeVectorParam(cs, threadGroupID, new Vector4(threadCountX, threadCountY, threadCountZ));
+                cmd.SetComputeBufferParam(cs, clusterCullingKernel, clusterLightCountBufferID, clusterLightCountBuffer);
+                cmd.SetComputeBufferParam(cs, clusterCullingKernel, clusterLightIndexBufferID, clusterLightIndexBuffer);
+
+                cmd.DispatchCompute(cs, clusterCullingKernel, threadGroupX, threadGroupY, 1);
                 
-                cmd.DispatchCompute(cs, cullingKernel, threadGroupX, threadGroupY, threadGroupZ);
-                
-                cmd.SetGlobalFloat(roxamiAdditionalLightsCountID, renderingData.lightData.additionalLightsCount);
+                cmd.SetGlobalBuffer(clusterLightCountBufferID, clusterLightCountBuffer);
+                cmd.SetGlobalBuffer(clusterLightIndexBufferID, clusterLightIndexBuffer);
+                ExecuteCommandBuffer(context, cmd);
+               
+                RoxamiCommonUtils.SetupMatrixConstants(cmd, ref renderingData);
+
                 cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ToonLit);
-                
-                //renderingData.cameraData.re
+#if UNITY_EDITOR
+                if (isDebugClusterLights)
+                {
+                    cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ClusteredDebug);
+                }
+#endif
             }
-            context.ExecuteCommandBuffer(cmd);
-            cmd.Clear();
-            
-            CommandBufferPool.Release(cmd);
+            ExecuteCommandBuffer(context, cmd);
+ 
         }
 
-        public override void FrameCleanup(CommandBuffer commandBuffer)
+        public override void Dispose()
         {
-
-        }
-
-        public void Dispose()
-        {
-            
+            CoreUtils.Destroy(m_DeferredToonMaterial);
         }
     }
 }

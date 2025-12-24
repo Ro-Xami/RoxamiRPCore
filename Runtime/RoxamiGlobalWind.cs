@@ -1,5 +1,5 @@
 ﻿using System;
-using UnityEditor;
+//using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -71,13 +71,13 @@ namespace RoxamiRPCore
             UpdateWind();
         }
         
-        [MenuItem("GameObject/RoxmiRP/GlobalWind")]
-        static void Create()
-        {
-            GameObject go = new GameObject("RoxmiGlobalWind");
-            go.AddComponent<RoxmiGlobalWind>();
-            Selection.activeGameObject = go;
-        }
+        // [MenuItem("GameObject/RoxmiRP/GlobalWind")]
+        // static void Create()
+        // {
+        //     GameObject go = new GameObject("RoxmiGlobalWind");
+        //     go.AddComponent<RoxmiGlobalWind>();
+        //     Selection.activeGameObject = go;
+        // }
 
         private void OnDrawGizmos()
         {
