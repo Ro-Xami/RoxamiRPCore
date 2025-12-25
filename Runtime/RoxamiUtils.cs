@@ -152,7 +152,7 @@ namespace RoxamiRPCore
     public static class RoxamiShaderConst
     {
         public static readonly int screenToWorldID = Shader.PropertyToID("_ScreenToWorld");
-        public const string deferredToonShaderName = "Hidden/RoxamiRP/ToonDeferred";
+        public const string deferredToonShaderName = "RoxamiRP/Core/ToonDeferred";
         public static readonly int roxamiAdditionalLightsCountID = Shader.PropertyToID("_RoxamiAdditionalLightsCount");
     }
 }

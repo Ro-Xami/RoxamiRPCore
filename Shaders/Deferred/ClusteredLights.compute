@@ -1,0 +1,71 @@
+#pragma kernel ClusteredLights
+#define _USE_RW_BUFFER
+
+#include "Packages/roxamirpcore/Shaders/Core/ToonLighting.hlsl"
+#include "Packages/roxamirpcore/Shaders/Core/ClusteredLightingCore.hlsl"
+
+float4 _CameraRightDir;//xyz:CameraRightDir, w:CameraAspect
+
+bool IntersectEllipseAABB(
+    float2 center,
+    float2 radius,   // (rx, ry)
+    float2 boxMin,
+    float2 boxMax)
+{
+    float2 closest = clamp(center, boxMin, boxMax);
+    float2 d = (closest - center) / radius;
+    return dot(d, d) <= 1.0;
+}
+
+bool IsLightAffectCluster(int lightIndex, float4 box)
+{
+    float3 lightPosWS = _AdditionalLightsPosition[lightIndex].xyz;
+
+    float4 lightCS = TransformWorldToHClip(lightPosWS);
+    // if (lightCS.w <= 0)
+    //     return false; // 在摄像机后面
+
+    float4 lightScr = ComputeScreenPos(lightCS);
+    float2 lightSS = lightScr.xy / lightScr.w;
+
+    float lightRadiusWS = sqrt(1 / _AdditionalLightsAttenuation[lightIndex].x);
+    float3 lightOffsetWS = lightPosWS + lightRadiusWS * _CameraRightDir.xyz;
+    float4 lightOffsetCS = TransformWorldToHClip(lightOffsetWS);
+    float4 lightOffsetScr = ComputeScreenPos(lightOffsetCS);
+    float2 lightOffsetSS = lightOffsetScr.xy / lightOffsetScr.w;
+
+    float lightRadiusSSX = length(lightOffsetSS - lightSS);
+    float lightRadiusSSY = lightRadiusSSX * _CameraRightDir.w;
+
+    return IntersectEllipseAABB(lightSS.xy, float2(lightRadiusSSX, lightRadiusSSY), box.xy, box.zw);
+}
+
+[numthreads(8,8,1)]
+void ClusteredLights (uint3 id : SV_DispatchThreadID)
+{
+    uint clusterIndex = GetIdFrom2D(id.xy);
+    _ClusterLightCountBuffer[clusterIndex] = 0;
+
+    float minX = id.x / _ClusterCount.x;
+    float maxX = (id.x + 1) / _ClusterCount.x;
+    float minY = id.y / _ClusterCount.y;
+    float maxY = (id.y + 1) / _ClusterCount.y;
+    float4 box = float4(minX, minY, maxX, maxY);
+
+    uint m_LightCount = 0;
+    uint m_LightStart = clusterIndex * _MaxClusterLightIndex;
+    
+    UNITY_LOOP
+    for (int lightIndex = 0; lightIndex < GetRoxamiAdditionalLightsCount(); lightIndex++)
+    {
+        if (m_LightCount > _MaxClusterLightIndex) break;
+        
+        if (IsLightAffectCluster(lightIndex, box))
+        {
+            _ClusterLightIndexBuffer[m_LightStart + m_LightCount] = lightIndex;
+            m_LightCount += 1;
+        }
+    }
+
+    _ClusterLightCountBuffer[clusterIndex] = m_LightCount;
+}

@@ -82,6 +82,38 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
 //===========================================================================//
 //=========================DebugClusterLights================================//
 //===========================================================================//
+TEXTURE2D(_DebugNumberMap);
+SAMPLER(sampler_DebugNumberMap);
+
+half _DebugAlpha;
+
+#define _Number 100
+#define _NumberX 10
+#define _NumberY 10
+
+half SampleNumber(uint id, float2 screenUV)
+{
+    uint number = id + 1;
+
+    uint tileX = (number - 1) % _NumberX;
+    uint tileY = (number - 1) / _NumberX;
+
+    float2 tileSize = float2(1.0 / _NumberX, 1.0 / _NumberY);
+
+    float2 tileMinUV;
+    tileMinUV.x = tileX * tileSize.x;
+    tileMinUV.y = 1.0 - (tileY + 1) * tileSize.y; // 如果你的图是左上为1
+
+    float2 localUV = frac(screenUV * _ClusterCount.xy);
+    float2 sampleUV = tileMinUV + localUV * tileSize;
+
+    return SAMPLE_TEXTURE2D(
+        _DebugNumberMap,
+        sampler_DebugNumberMap,
+        sampleUV
+    ).r;
+}
+
 half4 DebugClusterLights(Varyings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);
@@ -102,7 +134,11 @@ half4 DebugClusterLights(Varyings input) : SV_Target
 
     half3 color = lerp(half3(0, 0, 1), half3(1, 0, 0), (float)clusteredLightCount / (float)_MaxClusterLightIndex);
 
-    return half4(color, 0.85);
+    half number = SampleNumber(clusteredLightCount, screen_uv);
+
+    color = lerp(color, half3(1, 1, 1), number);
+
+    return half4(color, _DebugAlpha);
 }
 
 #endif

@@ -7,14 +7,13 @@ uint _MaxClusterLightIndex;
 
 #ifdef _USE_RW_BUFFER
 RWBuffer<int> _ClusterLightCountBuffer;
-RWBuffer<int>           _ClusterLightIndexBuffer;
+RWBuffer<int> _ClusterLightIndexBuffer;
 #else
 Buffer<int> _ClusterLightCountBuffer;
-Buffer<int>           _ClusterLightIndexBuffer;
+Buffer<int> _ClusterLightIndexBuffer;
 #endif
 
 float4 _ClusterCount;
-float4 _ClusterLength; // 1f / _ClusterCount
 
 //从3维id转换成1维id
 uint GetIdFrom2D(uint2 id)
@@ -26,7 +25,7 @@ uint GetIdFrom2D(uint2 id)
 
 uint GetIdFormClusterSpace(float2 screenPos)
 {
-    uint2 id2d = screenPos / _ClusterLength.xy;
+    uint2 id2d = screenPos * _ClusterCount.xy;
     return GetIdFrom2D(id2d);
 }
 
