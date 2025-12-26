@@ -30,18 +30,11 @@ Shader "RoxamiRP/Scene/ToonLit"
         [Toggle(_ALPHATEST_ON)] _AlphaClip("Alpha Clip", Float) = 0.0
         _Cutoff("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
 
-        [Enum(Off, 0, Front, 1, Back, 2)] _Cull("Cull Mode", Float) = 2.0
-        
-        [Enum(Off, 0, On, 1)] _ZWrite("ZWrite Mode", Float) = 1.0
+        [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull Mode", Float) = 2.0
         
         [ToggleUI] _ReceiveShadows("Receive Shadows", Float) = 1.0
         [ToggleOff] _SpecularHighlights("Specular Highlights", Float) = 1.0
         [ToggleOff] _EnvironmentReflections("Environment Reflections", Float) = 1.0
-        
-        //在GUI绘制
-        [HideInInspector] _Blend("__blend", Float) = 0.0
-        [HideInInspector] _SrcBlend("__src", Float) = 1.0
-        [HideInInspector] _DstBlend("__dst", Float) = 0.0
     }
 
     SubShader
@@ -66,9 +59,15 @@ Shader "RoxamiRP/Scene/ToonLit"
 
             // -------------------------------------
             // Render State Commands
-            ZWrite[_ZWrite]
+            ZWrite On
             ZTest LEqual
             Cull[_Cull]
+            
+            Stencil
+            {
+                Ref 100
+                Pass Replace
+            }
 
             HLSLPROGRAM
             #pragma target 4.5
@@ -162,46 +161,46 @@ Shader "RoxamiRP/Scene/ToonLit"
             ENDHLSL
         }
 
-        Pass
-        {
-            Name "DepthOnly"
-            Tags
-            {
-                "LightMode" = "DepthOnly"
-            }
-
-            // -------------------------------------
-            // Render State Commands
-            ZWrite On
-            ColorMask R
-            Cull[_Cull]
-
-            HLSLPROGRAM
-            #pragma target 2.0
-
-            // -------------------------------------
-            // Shader Stages
-            #pragma vertex DepthOnlyVertex
-            #pragma fragment DepthOnlyFragment
-
-            // -------------------------------------
-            // Material Keywords
-            #pragma shader_feature_local _ALPHATEST_ON
-
-            // -------------------------------------
-            // Unity defined keywords
-            #pragma multi_compile_fragment _ LOD_FADE_CROSSFADE
-
-            //--------------------------------------
-            // GPU Instancing
-            #pragma multi_compile_instancing
-
-            // -------------------------------------
-            // Includes
-            #include "Packages/roxamirpcore/Shaders/Toon/hlsl/ToonLitInput.hlsl"
-            #include "Packages/roxamirpcore/Shaders/Toon/hlsl/ToonLitDepthOnlyPass.hlsl"
-            ENDHLSL
-        }
+//        Pass
+//        {
+//            Name "DepthOnly"
+//            Tags
+//            {
+//                "LightMode" = "DepthOnly"
+//            }
+//
+//            // -------------------------------------
+//            // Render State Commands
+//            ZWrite On
+//            ColorMask R
+//            Cull[_Cull]
+//
+//            HLSLPROGRAM
+//            #pragma target 2.0
+//
+//            // -------------------------------------
+//            // Shader Stages
+//            #pragma vertex DepthOnlyVertex
+//            #pragma fragment DepthOnlyFragment
+//
+//            // -------------------------------------
+//            // Material Keywords
+//            #pragma shader_feature_local _ALPHATEST_ON
+//
+//            // -------------------------------------
+//            // Unity defined keywords
+//            #pragma multi_compile_fragment _ LOD_FADE_CROSSFADE
+//
+//            //--------------------------------------
+//            // GPU Instancing
+//            #pragma multi_compile_instancing
+//
+//            // -------------------------------------
+//            // Includes
+//            #include "Packages/roxamirpcore/Shaders/Toon/hlsl/ToonLitInput.hlsl"
+//            #include "Packages/roxamirpcore/Shaders/Toon/hlsl/ToonLitDepthOnlyPass.hlsl"
+//            ENDHLSL
+//        }
     }
 
     FallBack "Hidden/Universal Render Pipeline/FallbackError"

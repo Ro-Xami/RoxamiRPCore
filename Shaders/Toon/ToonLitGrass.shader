@@ -37,7 +37,7 @@ Shader "RoxamiRP/Scene/ToonLit_Grass"
         [Toggle(_ALPHATEST_ON)] _AlphaClip("Alpha Clip", Float) = 1
         _Cutoff("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
 
-        [Enum(Off, 0, Front, 1, Back, 2)] _Cull("Cull Mode", Float) = 2.0
+        [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull Mode", Float) = 2.0
     }
 
     SubShader

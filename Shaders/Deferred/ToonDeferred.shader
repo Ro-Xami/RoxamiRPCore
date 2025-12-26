@@ -5,29 +5,10 @@ Shader "RoxamiRP/Core/ToonDeferred"
         [Space(10)] [Header(Debug)]
         _DebugNumberMap ("Debug Number Map", 2D) = "white" {}
         _DebugAlpha ("Debug Alpha", Range(0, 1)) = 0.85
-//        _StencilRef ("StencilRef", Int) = 0
-//        _StencilReadMask ("StencilReadMask", Int) = 0
-//        _StencilWriteMask ("StencilWriteMask", Int) = 0
-//
-//        _LitPunctualStencilRef ("LitPunctualStencilWriteMask", Int) = 0
-//        _LitPunctualStencilReadMask ("LitPunctualStencilReadMask", Int) = 0
-//        _LitPunctualStencilWriteMask ("LitPunctualStencilWriteMask", Int) = 0
-//
-//        _SimpleLitPunctualStencilRef ("SimpleLitPunctualStencilWriteMask", Int) = 0
-//        _SimpleLitPunctualStencilReadMask ("SimpleLitPunctualStencilReadMask", Int) = 0
-//        _SimpleLitPunctualStencilWriteMask ("SimpleLitPunctualStencilWriteMask", Int) = 0
-//
+
 //        _LitDirStencilRef ("LitDirStencilRef", Int) = 0
 //        _LitDirStencilReadMask ("LitDirStencilReadMask", Int) = 0
 //        _LitDirStencilWriteMask ("LitDirStencilWriteMask", Int) = 0
-//
-//        _SimpleLitDirStencilRef ("SimpleLitDirStencilRef", Int) = 0
-//        _SimpleLitDirStencilReadMask ("SimpleLitDirStencilReadMask", Int) = 0
-//        _SimpleLitDirStencilWriteMask ("SimpleLitDirStencilWriteMask", Int) = 0
-//
-//        _ClearStencilRef ("ClearStencilRef", Int) = 0
-//        _ClearStencilReadMask ("ClearStencilReadMask", Int) = 0
-//        _ClearStencilWriteMask ("ClearStencilWriteMask", Int) = 0
     }
 
     SubShader
@@ -50,15 +31,13 @@ Shader "RoxamiRP/Core/ToonDeferred"
 
             // -------------------------------------
             // Stencil Settings
-//            Stencil {
-//                Ref [_LitDirStencilRef]
-//                ReadMask [_LitDirStencilReadMask]
-//                WriteMask [_LitDirStencilWriteMask]
-//                Comp Equal
-//                Pass Keep
-//                Fail Keep
-//                ZFail Keep
-//            }
+            Stencil {
+                Ref 100
+                Comp Equal
+                Pass Keep
+                Fail Keep
+                ZFail Keep
+            }
 
             HLSLPROGRAM
             #pragma target 4.5
