@@ -44,7 +44,7 @@ namespace RoxamiRPCore
         private static readonly Matrix4x4[] m_ScreenToWorld = new Matrix4x4[2];
         
         //From Urp DeferredLights
-        public static void SetupMatrixConstants(CommandBuffer cmd, ref RenderingData renderingData)
+        public static void SetupScreenToWorldMatrixConstants(CommandBuffer cmd, ref RenderingData renderingData)
         {
             ref CameraData cameraData = ref renderingData.cameraData;
             
@@ -97,48 +97,13 @@ namespace RoxamiRPCore
 
             cmd.SetGlobalMatrixArray(RoxamiShaderConst.screenToWorldID, screenToWorld);
         }
-        
-        /// <summary>
-        /// 获得摄像机视锥体八个点的位置
-        /// </summary>
-        /// <param name="cam"></param>
-        /// <returns></returns>
-        ///     0 ── 1   Near
-        ///     |    |
-        ///     3 ── 2
-        ///     4 ── 5   Far
-        ///     |    |
-        ///     7 ── 6
-        public static Vector4[] GetCameraFrustumCorners(Camera cam)
+
+        public static void DrawFullScreenTriangle(CommandBuffer cmd, Material mat, int passIndex = 0)
         {
-            Vector4[] corners = new Vector4[8];
-
-            // Near
-            Vector3[] nearCorners = new Vector3[4];
-            cam.CalculateFrustumCorners(
-                new Rect(0, 0, 1, 1),
-                cam.nearClipPlane,
-                Camera.MonoOrStereoscopicEye.Mono,
-                nearCorners
+            cmd.DrawProcedural(
+                Matrix4x4.identity, mat, passIndex,
+                MeshTopology.Triangles, 3
             );
-
-            // Far
-            Vector3[] farCorners = new Vector3[4];
-            cam.CalculateFrustumCorners(
-                new Rect(0, 0, 1, 1),
-                cam.farClipPlane,
-                Camera.MonoOrStereoscopicEye.Mono,
-                farCorners
-            );
-
-            // 转成世界空间
-            for (int i = 0; i < 4; i++)
-            {
-                corners[i]     = cam.transform.TransformPoint(nearCorners[i]);
-                corners[i + 4] = cam.transform.TransformPoint(farCorners[i]);
-            }
-
-            return corners;
         }
 
     }
@@ -146,13 +111,19 @@ namespace RoxamiRPCore
     public enum RoxamiToonDeferredPassInput
     {
         ToonLit,
+        ConvolutionOutline,
         ClusteredDebug
     }
     
     public static class RoxamiShaderConst
     {
-        public static readonly int screenToWorldID = Shader.PropertyToID("_ScreenToWorld");
         public const string deferredToonShaderName = "RoxamiRP/Core/ToonDeferred";
+        public const string convolutionOutlineShaderName = "RoxamiRP/Core/ConvolutionOutline";
+
+        public const string convolutionOutlineKeyword = "ConvolutionOutline_ON";
+        
+        public static readonly int screenToWorldID = Shader.PropertyToID("_ScreenToWorld");
         public static readonly int roxamiAdditionalLightsCountID = Shader.PropertyToID("_RoxamiAdditionalLightsCount");
+        public static readonly int convolutionOutlineTextureID = Shader.PropertyToID("_ConvolutionOutlineTexture");
     }
 }

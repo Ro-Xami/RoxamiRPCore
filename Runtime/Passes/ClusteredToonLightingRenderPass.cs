@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.Rendering.Universal.Internal;
 
 namespace RoxamiRPCore
 {
@@ -28,19 +30,20 @@ namespace RoxamiRPCore
             
             profilingSampler = new ProfilingSampler(bufferName);
             
-            settings = m_Settings;
-            cs = settings.computeShader;
+            clusteredSettings = m_Settings;
+            cs = clusteredSettings.computeShader;
             clusterCullingKernel = cs.FindKernel(cullingKernelName);
 
-            clusterCountX = settings.threadGroupX * numThreadsX;
-            clusterCountY = settings.threadGroupY * numThreadsY;
+            clusterCountX = clusteredSettings.threadGroupX * numThreadsX;
+            clusterCountY = clusteredSettings.threadGroupY * numThreadsY;
             var clusterLightCountBufferCount = clusterCountX * clusterCountY;
-            var clusterLightIndexBufferCount = clusterLightCountBufferCount * settings.maxClusterLightIndex;
+            var clusterLightIndexBufferCount = clusterLightCountBufferCount * clusteredSettings.maxClusterLightIndex;
             clusterLightCountBuffer = new ComputeBuffer(clusterLightCountBufferCount, sizeof(int));
             clusterLightIndexBuffer = new ComputeBuffer(clusterLightIndexBufferCount, sizeof(int));
         }
 
-        private readonly ClusteredLightingSettings settings;
+        //ClusteredLights
+        private readonly ClusteredLightingSettings clusteredSettings;
         
         private const string cullingKernelName = "ClusteredLights";
         private const int numThreadsX = 8;
@@ -77,11 +80,13 @@ namespace RoxamiRPCore
 
         public override bool NeedToExecute()
         {
-            if (settings == null || !settings.isActive || !cs || clusterCullingKernel < 0 || !DeferredToonMaterial)
+            if (clusteredSettings == null || !clusteredSettings.isActive || !cs || clusterCullingKernel < 0 || !DeferredToonMaterial)
                 return false;
             
             return true;
         }
+
+        public override void InitializeAdditionalLightsData(ref RenderingData renderingData, AdditionalLightsShadowCasterPass shadowCasterPass) { }
 
         public override void Execute(ScriptableRenderContext context, CommandBuffer commandBuffer, ref RenderingData renderingData)
         {
@@ -90,30 +95,15 @@ namespace RoxamiRPCore
             {
                 cmd.SetGlobalFloat(RoxamiShaderConst.roxamiAdditionalLightsCountID, renderingData.lightData.additionalLightsCount);
                 cmd.SetGlobalVector(clusterCountID, new Vector4(clusterCountX, clusterCountY));
-                cmd.SetGlobalInt(maxClusterLightIndexID, settings.maxClusterLightIndex);
+                cmd.SetGlobalInt(maxClusterLightIndexID, clusteredSettings.maxClusterLightIndex);
                 
-                cmd.SetGlobalVector(cameraRightDirID, new Vector4(
-                    renderingData.cameraData.camera.transform.right.x,
-                    renderingData.cameraData.camera.transform.right.y,
-                    renderingData.cameraData.camera.transform.right.z,
-                    renderingData.cameraData.camera.aspect));
+                ClusteredLights(renderingData);
+
+                DeferredLighting(context, ref renderingData);
+
+                DrawConvolutionOutline();
                 
-                cmd.SetComputeBufferParam(cs, clusterCullingKernel, clusterLightCountBufferID, clusterLightCountBuffer);
-                cmd.SetComputeBufferParam(cs, clusterCullingKernel, clusterLightIndexBufferID, clusterLightIndexBuffer);
-                cmd.DispatchCompute(cs, clusterCullingKernel, settings.threadGroupX, settings.threadGroupY, 1);
-                
-                cmd.SetGlobalBuffer(clusterLightCountBufferID, clusterLightCountBuffer);
-                cmd.SetGlobalBuffer(clusterLightIndexBufferID, clusterLightIndexBuffer);
-                ExecuteCommandBuffer(context, cmd);
-               
-                RoxamiCommonUtils.SetupMatrixConstants(cmd, ref renderingData);
-                cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ToonLit);
-#if UNITY_EDITOR
-                if (settings.isDebug)
-                {
-                    cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ClusteredDebug);
-                }
-#endif
+                DrawDebug();
             }
             ExecuteCommandBuffer(context, cmd);
  
@@ -123,5 +113,44 @@ namespace RoxamiRPCore
         {
             CoreUtils.Destroy(m_DeferredToonMaterial);
         }
+
+        private void ClusteredLights(RenderingData renderingData)
+        {
+            cmd.SetGlobalVector(cameraRightDirID, new Vector4(
+                renderingData.cameraData.camera.transform.right.x,
+                renderingData.cameraData.camera.transform.right.y,
+                renderingData.cameraData.camera.transform.right.z,
+                renderingData.cameraData.camera.aspect));
+                
+            cmd.SetComputeBufferParam(cs, clusterCullingKernel, clusterLightCountBufferID, clusterLightCountBuffer);
+            cmd.SetComputeBufferParam(cs, clusterCullingKernel, clusterLightIndexBufferID, clusterLightIndexBuffer);
+            cmd.DispatchCompute(cs, clusterCullingKernel, clusteredSettings.threadGroupX, clusteredSettings.threadGroupY, 1);
+        }
+        
+        private void DeferredLighting(ScriptableRenderContext context, ref RenderingData renderingData)
+        {
+            cmd.SetGlobalBuffer(clusterLightCountBufferID, clusterLightCountBuffer);
+            cmd.SetGlobalBuffer(clusterLightIndexBufferID, clusterLightIndexBuffer);
+            ExecuteCommandBuffer(context, cmd);
+               
+            RoxamiCommonUtils.SetupScreenToWorldMatrixConstants(cmd, ref renderingData);
+            cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ToonLit);
+        }
+
+        private void DrawConvolutionOutline()
+        {
+            cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ConvolutionOutline);
+        }
+
+        private void DrawDebug()
+        {
+#if UNITY_EDITOR
+            if (clusteredSettings.isDebug)
+            {
+                cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ClusteredDebug);
+            }
+#endif
+        }
+        
     }
 }

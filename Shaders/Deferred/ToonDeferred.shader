@@ -2,18 +2,51 @@ Shader "RoxamiRP/Core/ToonDeferred"
 {
     Properties
     {
+        [Space(10)] [Header(Outline)]
+        _ConvolutionOutline_Color ("Outline Color", Color) = (0, 0, 0, 0)
+        _ConvolutionOutline_OutlineWidth ("Outline Width", Range(0.1, 10.0)) = 1.0
+        _ConvolutionOutline_DepthThreshold ("Depth Threshold", Range(0.001, 0.1)) = 0.01
+        _ConvolutionOutline_OutlineIntensity ("Outline Intensity", Range(0.0, 10.0)) = 1.0
+
         [Space(10)] [Header(Debug)]
         _DebugNumberMap ("Debug Number Map", 2D) = "white" {}
         _DebugAlpha ("Debug Alpha", Range(0, 1)) = 0.85
-
-//        _LitDirStencilRef ("LitDirStencilRef", Int) = 0
-//        _LitDirStencilReadMask ("LitDirStencilReadMask", Int) = 0
-//        _LitDirStencilWriteMask ("LitDirStencilWriteMask", Int) = 0
     }
 
     SubShader
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline"}
+        
+        
+        HLSLINCLUDE
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+        #pragma target 4.5
+        // Deferred Rendering Path does not support the OpenGL-based graphics API:
+        // Desktop OpenGL, OpenGL ES 3.0, OpenGL ES 2.0, WebGL 2.0.
+        #pragma exclude_renderers gles gles3 glcore
+
+        // -------------------------------------
+        // Defines
+        #define _DIRECTIONAL //用于顶点阶段绘制全屏三角形
+
+        // -------------------------------------
+        // Properties
+        TEXTURE2D(_DebugNumberMap);
+        SAMPLER(sampler_DebugNumberMap);
+
+        CBUFFER_START(UnityPerMaterial)
+
+        half4 _ConvolutionOutline_Color;
+        float _ConvolutionOutline_OutlineWidth;
+        float _ConvolutionOutline_DepthThreshold;
+        float _ConvolutionOutline_OutlineIntensity;
+
+        half _DebugAlpha;
+        
+        CBUFFER_END
+        
+        ENDHLSL
 
         // 0 - Lit
         Pass
@@ -22,9 +55,10 @@ Shader "RoxamiRP/Core/ToonDeferred"
 
             // -------------------------------------
             // Render State Commands
-            ZTest NotEqual
             ZWrite Off
+            ZTest Always
             Cull Off
+            
             Blend One Zero
             Blend One SrcAlpha, Zero One
             BlendOp Add, Add
@@ -40,21 +74,6 @@ Shader "RoxamiRP/Core/ToonDeferred"
             }
 
             HLSLPROGRAM
-            #pragma target 4.5
-
-            // Deferred Rendering Path does not support the OpenGL-based graphics API:
-            // Desktop OpenGL, OpenGL ES 3.0, OpenGL ES 2.0, WebGL 2.0.
-            #pragma exclude_renderers gles gles3 glcore
-
-            // -------------------------------------
-            // Shader Stages
-            #pragma vertex Vertex
-            #pragma fragment ToonDeferredShading
-
-            // -------------------------------------
-            // Defines
-            #define _DIRECTIONAL //用于顶点阶段绘制全屏三角形
-
             // -------------------------------------
             // Universal Pipeline keywords
             #pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
@@ -62,24 +81,48 @@ Shader "RoxamiRP/Core/ToonDeferred"
             //#pragma multi_compile_fragment _ _DEFERRED_FIRST_LIGHT
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
-            //#pragma multi_compile_fragment _ LIGHTMAP_SHADOW_MIXING
-            //#pragma multi_compile_fragment _ SHADOWS_SHADOWMASK
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
-            //#pragma multi_compile_fragment _ _DEFERRED_MIXED_LIGHTING
             #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
-            //#pragma multi_compile_fragment _ _LIGHT_LAYERS
-            #pragma multi_compile_fragment _ _RENDER_PASS_ENABLED
-            #pragma multi_compile_fragment _ _LIGHT_COOKIES
 
-            // -------------------------------------
-            // Includes
-            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/Shaders/Utils/StencilDeferred.hlsl"
+            #pragma vertex Vertex
+            #pragma fragment ToonDeferredShading
             #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
 
             ENDHLSL
         }
 
-        // 1 - DebugClusterLights
+        // 1 - ConvolutionOutline
+        Pass
+        {
+            Name "ConvolutionOutline"
+
+            ZWrite Off
+            ZTest Always
+            Cull Off
+
+            Blend DstColor Zero
+
+            ColorMask RGB
+            
+            // -------------------------------------
+            // Stencil Settings
+            Stencil {
+                Ref 100
+                Comp Equal
+                Pass Keep
+                Fail Keep
+                ZFail Keep
+            }
+            
+            HLSLPROGRAM
+            #pragma vertex Vertex
+            #pragma fragment ConvolutionOutlineFragment
+            #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
+
+            ENDHLSL
+        }
+
+        // 2 - DebugClusterLights
         Pass
         {
             Name "Debug Cluster Lights"
@@ -91,24 +134,9 @@ Shader "RoxamiRP/Core/ToonDeferred"
             Blend SrcAlpha OneMinusSrcAlpha
 
             HLSLPROGRAM
-            #pragma target 4.5
 
-            // Deferred Rendering Path does not support the OpenGL-based graphics API:
-            // Desktop OpenGL, OpenGL ES 3.0, OpenGL ES 2.0, WebGL 2.0.
-            #pragma exclude_renderers gles gles3 glcore
-
-            // -------------------------------------
-            // Shader Stages
             #pragma vertex Vertex
             #pragma fragment DebugClusterLights
-
-            // -------------------------------------
-            // Defines
-            #define _DIRECTIONAL //用于顶点阶段绘制全屏三角形
-
-            // -------------------------------------
-            // Includes
-            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/Shaders/Utils/StencilDeferred.hlsl"
             #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
 
             ENDHLSL

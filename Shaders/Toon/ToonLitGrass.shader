@@ -69,6 +69,12 @@ Shader "RoxamiRP/Scene/ToonLit_Grass"
             ZWrite On
             ZTest LEqual
             Cull [_Cull]
+            
+            Stencil
+            {
+                Ref 100
+                Pass Replace
+            }
 
             HLSLPROGRAM
             #pragma target 4.5

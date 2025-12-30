@@ -6,22 +6,27 @@
 #include "Packages/roxamirpcore/Shaders/Core/ToonLighting.hlsl"
 #include "Packages/roxamirpcore/Shaders/Core/ClusteredLightingCore.hlsl"
 
-half4 ToonDeferredShading(Varyings input) : SV_Target
+float2 GetScreenUV(Varyings input)
 {
-    UNITY_SETUP_INSTANCE_ID(input);
-    UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
-
     float2 screen_uv = (input.screenUV.xy / input.screenUV.z);
 
-#if defined(SUPPORTS_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
+    #if defined(SUPPORTS_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
     float2 undistorted_screen_uv = screen_uv;
     UNITY_BRANCH if (_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
     {
         screen_uv = input.positionCS.xy * _ScreenSize.zw;
     }
-#endif
+    #endif
 
-    half4 shadowMask = 1.0;
+    return screen_uv;
+}
+
+half4 ToonDeferredShading(Varyings input) : SV_Target
+{
+    UNITY_SETUP_INSTANCE_ID(input);
+    UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+
+    float2 screen_uv = GetScreenUV(input);
 
     // Using SAMPLE_TEXTURE2D is faster than using LOAD_TEXTURE2D on iOS platforms (5% faster shader).
     // Possible reason: HLSLcc upcasts Load() operation to float, which doesn't happen for Sample()?
@@ -74,19 +79,89 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
         color.rgb += LightingToonBased(brdfData, additionalLight, inputData);
     }
 
+#ifdef ConvolutionOutline_ON
+    half outline = 1 - SAMPLE_TEXTURE2D(_ConvolutionOutlineTexture, sampler_ConvolutionOutlineTexture, screen_uv).r;
+    color.rgb *= outline;
+#endif
+
     color.a = 1;
 
     return color;
 }
 
 //===========================================================================//
+//=========================ConvolutionOutline================================//
+//===========================================================================//
+
+// Sobel卷积核
+static const float sobelX[9] = {
+    -1.0, 0.0, 1.0,
+    -2.0, 0.0, 2.0,
+    -1.0, 0.0, 1.0
+};
+
+static const float sobelY[9] = {
+    -1.0, -2.0, -1.0,
+     0.0,  0.0,  0.0,
+     1.0,  2.0,  1.0
+};
+
+// 获取深度值（线性深度）
+float GetLinearDepth(float2 uv)
+{
+    float depth = SAMPLE_TEXTURE2D_X_LOD(_CameraDepthTexture, my_point_clamp_sampler, uv, 0).x;
+    return LinearEyeDepth(depth, _ZBufferParams);
+}
+
+// 应用Sobel卷积
+float ApplySobel(float2 uv, float2 texelSize)
+{
+    float depthSumX = 0.0;
+    float depthSumY = 0.0;
+    
+    int index = 0;
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            float2 offset = float2(x, y) * texelSize * _ConvolutionOutline_OutlineWidth;
+            float2 sampleUV = uv + offset;
+            float depth = GetLinearDepth(sampleUV);
+            
+            depthSumX += depth * sobelX[index];
+            depthSumY += depth * sobelY[index];
+            
+            index++;
+        }
+    }
+    
+    // 计算梯度幅度
+    float gradient = sqrt(depthSumX * depthSumX + depthSumY * depthSumY);
+    return gradient;
+}
+
+half4 ConvolutionOutlineFragment(Varyings input) : SV_Target
+{
+    float2 screenUV = GetScreenUV(input);
+
+    float2 texelSize = float2(1.0 / _ScreenParams.x, 1.0 / _ScreenParams.y);
+
+    float edgeStrength = ApplySobel(screenUV, texelSize);
+
+    edgeStrength = step(_ConvolutionOutline_DepthThreshold, edgeStrength) * edgeStrength;
+
+    edgeStrength *= _ConvolutionOutline_OutlineIntensity;
+
+    edgeStrength = saturate(edgeStrength);
+
+    half3 outlineColor = lerp(half3(1, 1, 1), _ConvolutionOutline_Color.rgb, edgeStrength);
+    
+    return half4(outlineColor, 1);
+}
+
+//===========================================================================//
 //=========================DebugClusterLights================================//
 //===========================================================================//
-TEXTURE2D(_DebugNumberMap);
-SAMPLER(sampler_DebugNumberMap);
-
-half _DebugAlpha;
-
 #define _Number 100
 #define _NumberX 10
 #define _NumberY 10
@@ -119,22 +194,14 @@ half4 DebugClusterLights(Varyings input) : SV_Target
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-    float2 screen_uv = (input.screenUV.xy / input.screenUV.z);
+    float2 screenUV = GetScreenUV(input);
 
-#if defined(SUPPORTS_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
-    float2 undistorted_screen_uv = screen_uv;
-    UNITY_BRANCH if (_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
-    {
-        screen_uv = input.positionCS.xy * _ScreenSize.zw;
-    }
-#endif
-
-    uint clusterID = GetIdFormClusterSpace(screen_uv);
+    uint clusterID = GetIdFormClusterSpace(screenUV);
     uint clusteredLightCount = GetClusteredLightCount(clusterID);
 
     half3 color = lerp(half3(0, 0, 1), half3(1, 0, 0), (float)clusteredLightCount / (float)_MaxClusterLightIndex);
 
-    half number = SampleNumber(clusteredLightCount, screen_uv);
+    half number = SampleNumber(clusteredLightCount, screenUV);
 
     color = lerp(color, half3(1, 1, 1), number);
 

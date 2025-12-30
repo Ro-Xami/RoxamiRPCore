@@ -6,10 +6,12 @@ using UnityEngine.Rendering.Universal;
 namespace RoxamiRPCore
 {
     [CreateAssetMenu(menuName = "RoxamiRendering/DeferredLights", fileName = "DeferredLights")]
-    public class RoxamiDeferredCoreFeature : RoxamiAdditionalRendererData
+    public class RoxamiClusteredLighting : RoxamiAdditionalRendererData
     {
         [SerializeField] ClusteredLightingSettings settings = new ClusteredLightingSettings();
         private ClusteredLightingPass clusteredLightingPass;
+
+        private ScriptableRenderPass[] passes;
 
         public override RoxamiDeferredLights CreateDeferredRenderPass()
         {
