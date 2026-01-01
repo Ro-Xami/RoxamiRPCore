@@ -118,9 +118,16 @@ namespace RoxamiRPCore
     public static class RoxamiShaderConst
     {
         public const string deferredToonShaderName = "RoxamiRP/Core/ToonDeferred";
-        public const string convolutionOutlineShaderName = "RoxamiRP/Core/ConvolutionOutline";
+        public const string globalFogShaderName = "RoxamiRP/Core/GlobalFog";
 
         public const string convolutionOutlineKeyword = "ConvolutionOutline_ON";
+        public static readonly string[] globalFogKeywords =
+        {
+            "ROXAMI_FOG_NONE",
+            "ROXAMI_FOG_LINEAR",
+            "ROXAMI_FOG_EXP",
+            "ROXAMI_FOG_EXP2"
+        };
         
         public static readonly int screenToWorldID = Shader.PropertyToID("_ScreenToWorld");
         public static readonly int roxamiAdditionalLightsCountID = Shader.PropertyToID("_RoxamiAdditionalLightsCount");

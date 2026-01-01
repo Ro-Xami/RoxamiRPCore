@@ -44,7 +44,8 @@ MonoBehaviour:
     hdrDebugViewPS: {fileID: 4800000, guid: 573620ae32aec764abd4d728906d2587, type: 3}
   m_RendererFeatures:
   - {fileID: -3923990117755884610}
-  m_RendererFeatureMap: be6b0431c72f8bc9
+  - {fileID: 4637453561115113208}
+  m_RendererFeatureMap: be6b0431c72f8bc9f8f6a28c718b5b40
   m_UseNativeRenderPass: 0
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   xrSystemData: {fileID: 11400000, guid: 60e1133243b97e347b653163a8c01b64, type: 2}
@@ -84,3 +85,16 @@ MonoBehaviour:
   m_CopyDepthMode: 0
   m_AccurateGbufferNormals: 1
   m_IntermediateTextureMode: 1
+--- !u!114 &4637453561115113208
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 85e791f4b63f49c086b9f87122a2fc4f, type: 3}
+  m_Name: RoxamiCoreFeature
+  m_EditorClassIdentifier: 
+  m_Active: 1
