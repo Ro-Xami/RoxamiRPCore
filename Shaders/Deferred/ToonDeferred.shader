@@ -2,6 +2,9 @@ Shader "RoxamiRP/Core/ToonDeferred"
 {
     Properties
     {
+        [Header(Toon)]
+        _ToonLutMap ("Toon Lut Map", 2D) = "white" {}
+        
         [Space(10)] [Header(Outline)]
         _ConvolutionOutline_Color ("Outline Color", Color) = (0, 0, 0, 0)
         _ConvolutionOutline_OutlineWidth ("Outline Width", Range(0.1, 10.0)) = 1.0

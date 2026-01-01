@@ -66,7 +66,7 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
     Light mainLight = GetToonDeferredMainLight(inputData.positionWS, screen_uv);
 
     half4 color = 0;
-    color.rgb += LightingToonBased(brdfData, mainLight, inputData);
+    color.rgb += MainLightingToonBased(brdfData, mainLight, inputData);
 
     uint clusterID = GetIdFormClusterSpace(screen_uv);
     uint clusteredLightStart = GetClusteredLightStart(clusterID);

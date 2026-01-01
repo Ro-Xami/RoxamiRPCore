@@ -8,6 +8,9 @@
 int _RoxamiAdditionalLightsCount;
 #define GetRoxamiAdditionalLightsCount() _RoxamiAdditionalLightsCount
 
+TEXTURE2D(_ToonLutMap);
+SAMPLER(sampler_ToonLutMap);
+
 Light GetToonDeferredMainLight(float3 posWS, float2 screenUV)
 {
     Light mainLight = GetMainLight();
@@ -30,6 +33,19 @@ Light GetToonDeferredMainLight(float3 posWS, float2 screenUV)
 #endif
 
     return mainLight;
+}
+
+half3 MainLightingToonBased(BRDFData brdfData, Light light, InputData inputData)
+{
+    half NdotL = saturate(dot(inputData.normalWS, light.direction));
+    NdotL *= light.shadowAttenuation * light.distanceAttenuation;
+    half3 toonNdotL = SAMPLE_TEXTURE2D(_ToonLutMap, sampler_ToonLutMap, float2(NdotL, 0));
+    half3 radiance = light.color * toonNdotL;
+
+    half3 brdf = brdfData.diffuse;
+    brdf += brdfData.specular * DirectBRDFSpecular(brdfData, inputData.normalWS, light.direction, inputData.viewDirectionWS);
+
+    return brdf * radiance;
 }
 
 half3 LightingToonBased(BRDFData brdfData, Light light, InputData inputData)

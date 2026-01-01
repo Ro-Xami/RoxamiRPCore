@@ -3,6 +3,16 @@
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
+float GetReverseDepth(float depth)
+{
+    #if defined(UNITY_REVERSED_Z)
+    float reverseZ = depth;
+    #else
+    float reverseZ = lerp(UNITY_NEAR_CLIP_VALUE, 1, depth);
+    #endif
+    
+    return reverseZ;
+}
 
 //===========================================================================================//
 //=======================================Global Wind=========================================//
