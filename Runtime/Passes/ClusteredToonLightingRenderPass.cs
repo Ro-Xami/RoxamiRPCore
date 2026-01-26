@@ -102,6 +102,8 @@ namespace RoxamiRPCore
                 DeferredLighting(context, ref renderingData);
 
                 DrawConvolutionOutline();
+
+                ClearStencil();
                 
                 DrawDebug();
             }
@@ -140,6 +142,11 @@ namespace RoxamiRPCore
         private void DrawConvolutionOutline()
         {
             cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ConvolutionOutline);
+        }
+        
+        private void ClearStencil()
+        {
+            cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ClearStencil);
         }
 
         private void DrawDebug()

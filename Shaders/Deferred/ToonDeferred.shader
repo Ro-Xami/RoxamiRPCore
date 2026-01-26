@@ -68,7 +68,8 @@ Shader "RoxamiRP/Core/ToonDeferred"
 
             // -------------------------------------
             // Stencil Settings
-            Stencil {
+            Stencil
+            {
                 Ref 100
                 Comp Equal
                 Pass Keep
@@ -109,7 +110,8 @@ Shader "RoxamiRP/Core/ToonDeferred"
             
             // -------------------------------------
             // Stencil Settings
-            Stencil {
+            Stencil
+            {
                 Ref 100
                 Comp Equal
                 Pass Keep
@@ -125,7 +127,34 @@ Shader "RoxamiRP/Core/ToonDeferred"
             ENDHLSL
         }
 
-        // 2 - DebugClusterLights
+        // 2 - ClearStencil
+        Pass
+        {
+            Name "ClearStencil"
+
+            ZWrite Off
+            ZTest Always
+            Cull Off
+            
+            ColorMask 0
+            
+            // -------------------------------------
+            // Stencil Settings
+            Stencil
+            {
+                Comp Always
+                Pass Zero
+            }
+            
+            HLSLPROGRAM
+            #pragma vertex Vertex
+            #pragma fragment ClearStencilFragmentPass
+            #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
+
+            ENDHLSL
+        }
+
+        // 3 - DebugClusterLights
         Pass
         {
             Name "Debug Cluster Lights"

@@ -1,5 +1,5 @@
-#ifndef ROXAMI_LIT_INPUT_INCLUDED
-#define ROXAMI_LIT_INPUT_INCLUDED
+#ifndef ROXAMI_ACTOR_INPUT_INCLUDED
+#define ROXAMI_ACTOR_INPUT_INCLUDED
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/roxamirpcore/Shaders/Core/Common.hlsl"
@@ -18,39 +18,9 @@ half _BumpScale;
 half4 _EmissionColor;
 half _Cutoff;
 
-//Terrain
-half4 _BaseColor0;
-half4 _Splat0_ST;
-half _NormalScale0;
-half _Smoothness0;
-half _Metallic0;
-half _OcclusionStrength0;
+float4 _ActorFaceDirParams;
 
-half4 _BaseColor1;
-half4 _Splat1_ST;
-half _NormalScale1;
-half _Smoothness1;
-half _Metallic1;
-half _OcclusionStrength1;
-
-half4 _BaseColor2;
-half4 _Splat2_ST;
-half _NormalScale2;
-half _Smoothness2;
-half _Metallic2;
-half _OcclusionStrength2;
-
-half4 _BaseColor3;
-half4 _Splat3_ST;
-half _NormalScale3;
-half _Smoothness3;
-half _Metallic3;
-half _OcclusionStrength3;
-
-
-//ApplyWind
-half _WindWeightFactor;
-half4 _GrassColor;
+float4 _CameraDepthTexture_TexelSize;
 
 CBUFFER_END
 
@@ -58,10 +28,19 @@ TEXTURE2D(_BaseMap);            SAMPLER(sampler_BaseMap);
 TEXTURE2D(_BumpMap);            SAMPLER(sampler_BumpMap);
 TEXTURE2D(_EmissionMap);        SAMPLER(sampler_EmissionMap);
 TEXTURE2D(_MetallicGlossMap);   SAMPLER(sampler_MetallicGlossMap);
-TEXTURE2D(_WindWeightMask);     SAMPLER(sampler_WindWeightMask);
+
+TEXTURE2D(_ActorFaceSdfMap);    SAMPLER(sampler_ActorFaceSdfMap);
+TEXTURE2D(_ActorLut);           SAMPLER(sampler_ActorLut);
 
 float4 _BaseMap_TexelSize;
 float4 _BaseMap_MipInfo;
+
+float4 _ActorRimParams;
+#define _ActorRimOffest         _ActorRimParams.x
+#define _ActorRimThreshold      _ActorRimParams.y
+
+#define _ActorFaceFrontDirXZ    _ActorFaceDirParams.xy
+#define _ActorFaceRightDirXZ    _ActorFaceDirParams.zw
 
 ///////////////////////////////////////////////////////////////////////////////
 //                      Material Property Helpers                            //

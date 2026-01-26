@@ -52,6 +52,10 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
     #endif
     float4 posWS = mul(_ScreenToWorld[eyeIndex], float4(input.positionCS.xy, d, 1.0));
     posWS.xyz *= rcp(posWS.w);
+    
+    float4 shadowCoord = TransformWorldToShadowCoord(posWS);
+    float cascade = ComputeCascadeIndex(posWS) / 4;
+    //return half4(cascade.xxx, 1);
 
 #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
         AmbientOcclusionFactor aoFactor = GetScreenSpaceAmbientOcclusion(screen_uv);
@@ -157,6 +161,14 @@ half4 ConvolutionOutlineFragment(Varyings input) : SV_Target
     half3 outlineColor = lerp(half3(1, 1, 1), _ConvolutionOutline_Color.rgb, edgeStrength);
     
     return half4(outlineColor, 1);
+}
+
+//===========================================================================//
+//===============================ClearStencil================================//
+//===========================================================================//
+half4 ClearStencilFragmentPass(Varyings input) : SV_Target
+{
+    return 0;
 }
 
 //===========================================================================//

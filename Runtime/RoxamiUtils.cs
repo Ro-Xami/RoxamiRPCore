@@ -112,6 +112,7 @@ namespace RoxamiRPCore
     {
         ToonLit,
         ConvolutionOutline,
+        ClearStencil,
         ClusteredDebug
     }
     
