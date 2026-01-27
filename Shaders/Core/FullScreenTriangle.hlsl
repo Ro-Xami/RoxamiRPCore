@@ -9,25 +9,33 @@ struct Varyings
     float2 uv : TEXCORRD0;
 };
 
-Varyings FullScreenTriangle (uint vertexID : SV_VertexID)
+void InitializedFullScreenTriangle(uint vertexID : SV_VertexID, inout float4 positionCS, inout float2 uv)
 {
-    Varyings OUT = (Varyings) 0;
-    OUT.positionCS = float4(
+    positionCS = float4(
         vertexID <= 1 ? -1.0 : 3.0,
         vertexID == 1 ? 3.0 : -1.0,
         0.0, 1.0
     );
     
-    OUT.uv = float2(
+    uv = float2(
         vertexID <= 1 ? 0.0 : 2.0,
         vertexID == 1 ? 2.0 : 0.0
     );
     
     #if UNITY_UV_STARTS_AT_TOP
-        OUT.uv.y = 1.0 - OUT.uv.y;
+    uv.y = 1.0 - uv.y;
     #endif
-    
-    return OUT;
 }
+
+Varyings FullScreenTriangle (uint vertexID : SV_VertexID)
+{
+    Varyings varyings = (Varyings) 0;
+    
+    InitializedFullScreenTriangle(vertexID, varyings.positionCS, varyings.uv);
+
+    return varyings;
+}
+
+
 
 #endif

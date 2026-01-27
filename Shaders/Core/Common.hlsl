@@ -3,6 +3,14 @@
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
+float Square(float x) { return x * x;} 
+float2 Square(float2 x) { return x * x;} 
+float3 Square(float3 x) { return x * x;} 
+float4 Square(float4 x) { return x * x;}
+
+//========================================================================================//
+//====================================Space Transform=====================================//
+//========================================================================================//
 float GetReverseDepth(float depth)
 {
     #if defined(UNITY_REVERSED_Z)
@@ -14,8 +22,42 @@ float GetReverseDepth(float depth)
     return reverseZ;
 }
 
+void GetReverseDepthWithSkybox(float depth, inout bool isSkybox)
+{
+    isSkybox = false;
+    
+    #if defined(UNITY_REVERSED_Z)
+    if (depth <= FLT_MIN)
+    {
+        isSkybox = true;
+    }
+    #else
+    depth = lerp(UNITY_NEAR_CLIP_VALUE, 1, depth);
+    if (depth >= 1)
+    {
+        isSkybox = true;
+    }
+    #endif
+}
+
+float3 CalculateDepthToPositionWS(float reverseZ, float2 screenUV)
+{
+    float4 ndc = float4(screenUV * 2.0 - 1.0, reverseZ, 1.0);
+
+#if UNITY_UV_STARTS_AT_TOP
+    ndc.y = -ndc.y;
+#endif
+    // if (!_ProjectionParams.x)
+    // {
+    //     
+    // }
+
+    float4 positionWS = mul(UNITY_MATRIX_I_VP, ndc);
+    return positionWS.xyz / positionWS.w;
+}
+
 //===========================================================================================//
-//=======================================Global Fog=========================================//
+//=======================================Global Fog==========================================//
 //===========================================================================================//
 
 half3 _RoxamiGlobalFogColor;

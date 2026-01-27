@@ -1,4 +1,4 @@
-Shader "RoxamiRP/Core/GlobalFog"
+Shader "RoxamiRP/Utils/GlobalFog"
 {
     Properties
     {

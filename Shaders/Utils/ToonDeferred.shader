@@ -90,7 +90,7 @@ Shader "RoxamiRP/Core/ToonDeferred"
 
             #pragma vertex Vertex
             #pragma fragment ToonDeferredShading
-            #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
+            #include_with_pragmas "Packages/roxamirpcore/Shaders/Utils/ToonDeferredFragment.hlsl"
 
             ENDHLSL
         }
@@ -122,7 +122,7 @@ Shader "RoxamiRP/Core/ToonDeferred"
             HLSLPROGRAM
             #pragma vertex Vertex
             #pragma fragment ConvolutionOutlineFragment
-            #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
+            #include_with_pragmas "Packages/roxamirpcore/Shaders/Utils/ToonDeferredFragment.hlsl"
 
             ENDHLSL
         }
@@ -149,7 +149,7 @@ Shader "RoxamiRP/Core/ToonDeferred"
             HLSLPROGRAM
             #pragma vertex Vertex
             #pragma fragment ClearStencilFragmentPass
-            #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
+            #include_with_pragmas "Packages/roxamirpcore/Shaders/Utils/ToonDeferredFragment.hlsl"
 
             ENDHLSL
         }
@@ -169,7 +169,7 @@ Shader "RoxamiRP/Core/ToonDeferred"
 
             #pragma vertex Vertex
             #pragma fragment DebugClusterLights
-            #include_with_pragmas "Packages/roxamirpcore/Shaders/Deferred/ToonDeferredFragment.hlsl"
+            #include_with_pragmas "Packages/roxamirpcore/Shaders/Utils/ToonDeferredFragment.hlsl"
 
             ENDHLSL
         }
