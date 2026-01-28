@@ -104,9 +104,27 @@ MonoBehaviour:
   m_Name: RoxamiCoreFeature
   m_EditorClassIdentifier: 
   m_Active: 1
+  hbaoSettings:
+    isActive: 1
+    computeShader: {fileID: 0}
+    downsample: 0
+    intensity: 1
+    radius: 0.5
+    maxStepSize: 10
+    angleBias: 0.1
+    blurSettings:
+      blurType: 0
+      blurRadios: 1
+      iterations: 1
+      downSample: 0
   actorForwardSettings:
+    isActive: 1
     layerMask:
       serializedVersion: 2
       m_Bits: 4294967295
     rimOffset: 3.2
     rimThreshold: 0.00502
+  pixelSettings:
+    isActive: 1
+    downSample: 0.5
+    renderPassEvent: 1000

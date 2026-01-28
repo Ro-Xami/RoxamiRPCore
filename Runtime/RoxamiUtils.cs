@@ -121,6 +121,8 @@ namespace RoxamiRPCore
         public const string deferredToonShaderName = "RoxamiRP/Utils/ToonDeferred";
         public const string globalFogShaderName = "RoxamiRP/Utils/GlobalFog";
         public const string blurShaderName = "RoxamiRP/Utils/Blur";
+        
+        public const string volumeLightingShaderName = "RoxamiRP/Utils/VolumeLighting";
 
         public const string convolutionOutlineKeyword = "ConvolutionOutline_ON";
         public static readonly string[] globalFogKeywords =
@@ -130,10 +132,11 @@ namespace RoxamiRPCore
             "ROXAMI_FOG_EXP",
             "ROXAMI_FOG_EXP2"
         };
-
-        public const string gbufferNormalOctKeyword = "_GBUFFER_NORMALS_OCT";
+        
+        public const string hbaoKeyword = "_HBAO";
         
         public static readonly int cameraDepthTextureID = Shader.PropertyToID("_CameraDepthTexture");
+        public static readonly int mainLightShadowmapTextureID = Shader.PropertyToID("_MainLightShadowmapTexture");
         public static readonly int screenToWorldID = Shader.PropertyToID("_ScreenToWorld");
         public static readonly int roxamiAdditionalLightsCountID = Shader.PropertyToID("_RoxamiAdditionalLightsCount");
         public static readonly int convolutionOutlineTextureID = Shader.PropertyToID("_ConvolutionOutlineTexture");

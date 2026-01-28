@@ -21,6 +21,8 @@ float2 GetScreenUV(Varyings input)
     return screen_uv;
 }
 
+TEXTURE2D_X_HALF(_HBAoTexture);
+
 half4 ToonDeferredShading(Varyings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);
@@ -52,14 +54,10 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
     #endif
     float4 posWS = mul(_ScreenToWorld[eyeIndex], float4(input.positionCS.xy, d, 1.0));
     posWS.xyz *= rcp(posWS.w);
-    
-    float4 shadowCoord = TransformWorldToShadowCoord(posWS);
-    float cascade = ComputeCascadeIndex(posWS) / 4;
-    //return half4(cascade.xxx, 1);
 
-#if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
-        AmbientOcclusionFactor aoFactor = GetScreenSpaceAmbientOcclusion(screen_uv);
-#endif
+// #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
+//         AmbientOcclusionFactor aoFactor = GetScreenSpaceAmbientOcclusion(screen_uv);
+// #endif
 
     InputData inputData = InputDataFromGbufferAndWorldPosition(gbuffer2, posWS.xyz);
 
@@ -83,12 +81,10 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
         color.rgb += LightingToonBased(brdfData, additionalLight, inputData);
     }
 
-#ifdef ConvolutionOutline_ON
-    half outline = 1 - SAMPLE_TEXTURE2D(_ConvolutionOutlineTexture, sampler_ConvolutionOutlineTexture, screen_uv).r;
-    color.rgb *= outline;
+    color.a = surfaceDataOcclusion;
+#if defined(_HBAO)
+    color.a *= saturate(1 - SAMPLE_TEXTURE2D_X_LOD(_HBAoTexture, my_point_clamp_sampler, screen_uv, 0).r);
 #endif
-
-    color.a = 1;
 
     return color;
 }

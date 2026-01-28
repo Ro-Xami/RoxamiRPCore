@@ -8,6 +8,14 @@ float2 Square(float2 x) { return x * x;}
 float3 Square(float3 x) { return x * x;} 
 float4 Square(float4 x) { return x * x;}
 
+// Simple hash function
+float Hash21(uint2 p)
+{
+    p = 1103515245U * ((p >> 1U) ^ (p.yx));
+    uint h32 = 1103515245U * ((p.x) ^ (p.y >> 3U));
+    return h32 * (1.0 / float(0xffffffffU));
+}
+
 //========================================================================================//
 //====================================Space Transform=====================================//
 //========================================================================================//
@@ -22,7 +30,7 @@ float GetReverseDepth(float depth)
     return reverseZ;
 }
 
-void GetReverseDepthWithSkybox(float depth, inout bool isSkybox)
+void GetReverseDepthWithSkybox(inout float depth, inout bool isSkybox)
 {
     isSkybox = false;
     

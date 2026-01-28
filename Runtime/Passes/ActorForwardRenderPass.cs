@@ -6,7 +6,7 @@ using UnityEngine.Rendering.Universal;
 namespace RoxamiRPCore
 {
     [Serializable]
-    public class ActorForwardSettings
+    public class ActorForwardSettings : RoxamiCoreFeatureSettingsBase
     {
         public LayerMask layerMask;
         [Min(0)] public float rimOffset;

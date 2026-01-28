@@ -17,9 +17,9 @@ namespace RoxamiRPCore
     public class BlurSettings
     {
         public BlurType blurType = BlurType.Box;
-        [Range(0f, 10f)] public float blurRadios;
-        [Range(1, 10)] public int iterations;
-        [Range(0, 10)] public int downSample;
+        [Range(0f, 10f)] public float blurRadios = 1.0f;
+        [Range(1, 10)] public int iterations = 1;
+        [Range(0, 10)] public int downSample = 0;
         
         public static BlurSettings Default = new BlurSettings()
         {

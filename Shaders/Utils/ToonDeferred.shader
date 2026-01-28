@@ -78,6 +78,8 @@ Shader "RoxamiRP/Core/ToonDeferred"
             }
 
             HLSLPROGRAM
+            #pragma multi_compile_fragment _ _HBAO
+            
             // -------------------------------------
             // Universal Pipeline keywords
             #pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
