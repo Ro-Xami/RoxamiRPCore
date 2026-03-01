@@ -175,6 +175,28 @@ Shader "RoxamiRP/Core/ToonDeferred"
 
             ENDHLSL
         }
+
+        // 4 - RenderingDebug
+        Pass
+        {
+            Name "Rendering Debug"
+
+            ZTest Always
+            ZWrite Off
+            Cull Off
+            
+            Blend One One
+
+            HLSLPROGRAM
+            
+            #pragma multi_compile _ _RoDebug_None _RoDebug_Albedo _RoDebug_Normal _RoDebug_Metallic _RoDebug_Smoothness _RoDebug_Occlusion _RoDebug_MSA
+
+            #pragma vertex Vertex
+            #pragma fragment RenderingDebug
+            #include_with_pragmas "Packages/roxamirpcore/Shaders/Utils/ToonDeferredFragment.hlsl"
+
+            ENDHLSL
+        }
     }
 
     FallBack "Hidden/Universal Render Pipeline/FallbackError"

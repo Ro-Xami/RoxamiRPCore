@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -10,13 +10,29 @@ namespace RoxamiRPCore
     [Serializable]
     public class ClusteredLightingSettings
     {
+        [Header("Clustered Lighting")]
         public bool isActive;
-        public bool isDebug;
+        public bool isClusteredDebug;
         public Material deferredMaterial;
         public ComputeShader computeShader;
         [Range(1, 99)] public int maxClusterLightIndex = 10;
         [Range(1, 5)] public int threadGroupX = 10;
         [Range(1, 5)] public int threadGroupY = 10;
+        
+        [Header("Rendering Debug")]
+        public bool isRenderingDebug;
+        public RoxamiRenderingDebugOutput renderingOutput = RoxamiRenderingDebugOutput.None;
+    }
+    
+    public enum RoxamiRenderingDebugOutput
+    {
+        None,
+        Albedo,
+        Normal,
+        Metallic,
+        Smoothness,
+        Occlusion,
+        MSA,
     }
     
     public class ClusteredLightingPass : RoxamiDeferredLights
@@ -74,6 +90,17 @@ namespace RoxamiRPCore
             }
         }
 
+        private static string[] renderingDebugKeywords = new string[]
+        {
+            "_RoDebug_None",
+            "_RoDebug_Albedo",
+            "_RoDebug_Normal",
+            "_RoDebug_Metallic",
+            "_RoDebug_Smoothness",
+            "_RoDebug_Occlusion",
+            "_RoDebug_MSA"
+        };
+
         private const string bufferName = "ClusterLighting";
         private readonly ProfilingSampler profilingSampler;
         private CommandBuffer cmd;
@@ -105,7 +132,9 @@ namespace RoxamiRPCore
 
                 ClearStencil();
                 
-                DrawDebug();
+                DrawClusteredDebug();
+
+                DrawRenderingDebug(renderingData);
             }
             ExecuteCommandBuffer(context, cmd);
  
@@ -149,14 +178,64 @@ namespace RoxamiRPCore
             cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ClearStencil);
         }
 
-        private void DrawDebug()
+        private void DrawClusteredDebug()
         {
 #if UNITY_EDITOR
-            if (clusteredSettings.isDebug)
+            if (clusteredSettings.isClusteredDebug)
             {
                 cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ClusteredDebug);
             }
 #endif
+        }
+
+        private void DrawRenderingDebug(RenderingData renderingData)
+        {
+#if UNITY_EDITOR
+            var cameraType = renderingData.cameraData.camera.cameraType;
+            
+            if (!clusteredSettings.isRenderingDebug ||
+                clusteredSettings.renderingOutput == RoxamiRenderingDebugOutput.None ||
+                (cameraType != CameraType.Game && cameraType != CameraType.SceneView))
+                return;
+
+            cmd.ClearRenderTarget(false, true, Color.clear);
+
+            switch (clusteredSettings.renderingOutput)
+            {
+                case RoxamiRenderingDebugOutput.None:
+                    EnableRenderingDebugKeyword(RoxamiRenderingDebugOutput.None);
+                    break;
+                case RoxamiRenderingDebugOutput.Albedo:
+                    EnableRenderingDebugKeyword(RoxamiRenderingDebugOutput.Albedo);
+                    break;
+                case RoxamiRenderingDebugOutput.Normal:
+                    EnableRenderingDebugKeyword(RoxamiRenderingDebugOutput.Normal);
+                    break;
+                case RoxamiRenderingDebugOutput.Metallic:
+                    EnableRenderingDebugKeyword(RoxamiRenderingDebugOutput.Metallic);
+                    break;
+                case RoxamiRenderingDebugOutput.Smoothness:
+                    EnableRenderingDebugKeyword(RoxamiRenderingDebugOutput.Smoothness);
+                    break;
+                case RoxamiRenderingDebugOutput.Occlusion:
+                    EnableRenderingDebugKeyword(RoxamiRenderingDebugOutput.Occlusion);
+                    break;
+                case RoxamiRenderingDebugOutput.MSA:
+                    EnableRenderingDebugKeyword(RoxamiRenderingDebugOutput.MSA);
+                    break;
+            }
+            
+            cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.RenderingDebug);
+#endif
+        }
+
+        void EnableRenderingDebugKeyword(RoxamiRenderingDebugOutput output)
+        {
+            foreach (var keyword in renderingDebugKeywords)
+            {
+                cmd.DisableShaderKeyword(keyword);
+            }
+            cmd.EnableShaderKeyword(renderingDebugKeywords[(int)output]);
         }
         
     }

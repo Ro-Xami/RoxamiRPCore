@@ -39,7 +39,7 @@ half3 MainLightingToonBased(BRDFData brdfData, Light light, InputData inputData)
 {
     half NdotL = saturate(dot(inputData.normalWS, light.direction));
     NdotL *= light.shadowAttenuation * light.distanceAttenuation;
-    half3 toonNdotL = SAMPLE_TEXTURE2D(_ToonLutMap, sampler_ToonLutMap, float2(NdotL, 0));
+    half3 toonNdotL = SAMPLE_TEXTURE2D_LOD(_ToonLutMap, sampler_ToonLutMap, float2(NdotL, 0), 0).xyz;
     half3 radiance = light.color * toonNdotL;
 
     half3 brdf = brdfData.diffuse;

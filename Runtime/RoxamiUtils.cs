@@ -113,7 +113,8 @@ namespace RoxamiRPCore
         ToonLit,
         ConvolutionOutline,
         ClearStencil,
-        ClusteredDebug
+        ClusteredDebug,
+        RenderingDebug
     }
     
     public static class RoxamiShaderConst

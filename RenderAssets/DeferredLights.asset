@@ -14,9 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   settings:
     isActive: 1
-    isDebug: 0
+    isClusteredDebug: 0
     deferredMaterial: {fileID: 2100000, guid: 70c84e99113f890488186730640d55e9, type: 2}
     computeShader: {fileID: 7200000, guid: c82dd86a95310a14caf8f1ce1e80f1c4, type: 3}
     maxClusterLightIndex: 15
     threadGroupX: 3
     threadGroupY: 2
+    isRenderingDebug: 0
+    renderingOutput: 0

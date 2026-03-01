@@ -216,4 +216,75 @@ half4 DebugClusterLights(Varyings input) : SV_Target
     return half4(color, _DebugAlpha);
 }
 
+//===========================================================================//
+//============================Rendering Debug================================//
+//===========================================================================//
+half4 RenderingDebug(Varyings input) : SV_Target
+{
+    UNITY_SETUP_INSTANCE_ID(input);
+    UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+
+    float2 screen_uv = GetScreenUV(input);
+
+    // Using SAMPLE_TEXTURE2D is faster than using LOAD_TEXTURE2D on iOS platforms (5% faster shader).
+    // Possible reason: HLSLcc upcasts Load() operation to float, which doesn't happen for Sample()?
+    float d        = SAMPLE_TEXTURE2D_X_LOD(_CameraDepthTexture, my_point_clamp_sampler, screen_uv, 0).x; // raw depth value has UNITY_REVERSED_Z applied on most platforms.
+    half4 gbuffer0 = SAMPLE_TEXTURE2D_X_LOD(_GBuffer0, my_point_clamp_sampler, screen_uv, 0);
+    half4 gbuffer1 = SAMPLE_TEXTURE2D_X_LOD(_GBuffer1, my_point_clamp_sampler, screen_uv, 0);
+    half4 gbuffer2 = SAMPLE_TEXTURE2D_X_LOD(_GBuffer2, my_point_clamp_sampler, screen_uv, 0);
+
+    half surfaceDataOcclusion = gbuffer1.a;
+    uint materialFlags = UnpackMaterialFlags(gbuffer0.a);
+
+#if defined(SUPPORTS_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
+    UNITY_BRANCH if (_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
+    {
+        input.positionCS.xy = undistorted_screen_uv * _ScreenSize.xy;
+    }
+#endif
+
+    #if defined(USING_STEREO_MATRICES)
+    int eyeIndex = unity_StereoEyeIndex;
+    #else
+    int eyeIndex = 0;
+    #endif
+    float4 posWS = mul(_ScreenToWorld[eyeIndex], float4(input.positionCS.xy, d, 1.0));
+    posWS.xyz *= rcp(posWS.w);
+
+// #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
+//         AmbientOcclusionFactor aoFactor = GetScreenSpaceAmbientOcclusion(screen_uv);
+// #endif
+
+    InputData inputData = InputDataFromGbufferAndWorldPosition(gbuffer2, posWS.xyz);
+
+    bool materialSpecularHighlightsOff = (materialFlags & kMaterialFlagSpecularHighlightsOff);
+
+    BRDFData brdfData = BRDFDataFromGbuffer(gbuffer0, gbuffer1, gbuffer2);
+    
+    SurfaceData surfaceData = SurfaceDataFromGbuffer(gbuffer0, gbuffer1, gbuffer2, 0);
+    
+    half4 color = 0;
+    color.a = d == 0? 0: 1;
+    
+    #if defined(_RoDebug_None)
+    color = 0;
+    #elif defined(_RoDebug_Albedo)
+    color.rgb = surfaceData.albedo;
+    #elif defined(_RoDebug_Normal)
+    half3 normal = PackNormal(inputData.normalWS) * 0.5f + 0.5f;
+    normal.y = 1 - normal.y;
+    color.rgb = normal;
+    #elif defined(_RoDebug_Metallic)
+    color.rgb = surfaceData.metallic.xxx;
+    #elif defined(_RoDebug_Smoothness)
+    color.rgb = surfaceData.smoothness.xxx;
+    #elif defined(_RoDebug_Occlusion)
+    color.rgb = surfaceData.occlusion.xxx;
+    #elif defined(_RoDebug_MSA)
+    color.rgb = half3(surfaceData.metallic, surfaceData.smoothness, surfaceData.occlusion);
+    #endif
+
+    return color;
+}
+
 #endif

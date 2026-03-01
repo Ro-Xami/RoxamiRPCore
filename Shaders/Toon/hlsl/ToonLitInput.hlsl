@@ -86,6 +86,11 @@ half4 SampleAlbedoAlpha(float2 uv, TEXTURE2D_PARAM(albedoAlphaMap, sampler_albed
 
 half3 SampleNormal(float2 uv, TEXTURE2D_PARAM(bumpMap, sampler_bumpMap), half scale = half(1.0))
 {
+    #ifdef _TOON_LIT_2D
+    half4 n = SAMPLE_TEXTURE2D(bumpMap, sampler_bumpMap, uv);
+    return n.xyz * 2 - 1;
+    #else
+    
     #ifdef _NORMALMAP
     half4 n = SAMPLE_TEXTURE2D(bumpMap, sampler_bumpMap, uv);
     #if BUMP_SCALE_NOT_SUPPORTED
@@ -95,6 +100,8 @@ half3 SampleNormal(float2 uv, TEXTURE2D_PARAM(bumpMap, sampler_bumpMap), half sc
     #endif
     #else
     return half3(0.0h, 0.0h, 1.0h);
+    #endif
+    
     #endif
 }
 
