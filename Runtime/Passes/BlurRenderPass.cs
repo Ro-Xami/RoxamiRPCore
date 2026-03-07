@@ -12,6 +12,13 @@ namespace RoxamiRPCore
         Box,
         Gaussian,
     }
+
+    [SerializeField]
+    public enum BlurMaterialMode
+    {
+        Base,
+        Mask,
+    }
     
     [Serializable]
     public class BlurSettings
@@ -19,7 +26,7 @@ namespace RoxamiRPCore
         public BlurType blurType = BlurType.Box;
         [Range(0f, 10f)] public float blurRadios = 1.0f;
         [Range(1, 10)] public int iterations = 1;
-        [Range(0, 10)] public int downSample = 0;
+        [Range(0, 4)] public int downSample = 0;
         
         public static BlurSettings Default = new BlurSettings()
         {
@@ -28,6 +35,12 @@ namespace RoxamiRPCore
             iterations = 1,
             downSample = 1,
         };
+    }
+    
+    [Serializable]
+    public class RoxamiBlurVolumeSettings : VolumeParameter<BlurSettings>
+    {
+        public RoxamiBlurVolumeSettings(BlurSettings value, bool overrideState = false) : base(value, overrideState) { }
     }
     
     public class BlurRenderPass
@@ -45,7 +58,8 @@ namespace RoxamiRPCore
         private static readonly int targetID = Shader.PropertyToID("_PostBlurInputTexture");
         private static readonly int offsetID = Shader.PropertyToID("_PostBlurOffset");
         private RenderTextureDescriptor m_Descriptor;
-        private RTHandle m_Target;
+        private RTHandle m_Input;
+        private RTHandle m_Output;
         
         private const int m_MaxSampleCount = 8;
         private const string blurSampleRTAName = "_BlurSampleA";
@@ -69,17 +83,45 @@ namespace RoxamiRPCore
             }
         }
 
-        public void Setup(CommandBuffer commandBuffer, RTHandle target, BlurSettings settings, RenderTextureDescriptor descriptor)
+        private static readonly int enableMaskBlurID = Shader.PropertyToID("_PostBlur_Mask_ON");
+        private const string enableMaskBlurKeyword = "_PostBlur_Mask";
+        private static readonly int maskBlurTextureID = Shader.PropertyToID("_BlurOffsetMaskTexture");
+
+        public void Setup(CommandBuffer commandBuffer, RTHandle input, RTHandle output, BlurSettings settings, RenderTextureDescriptor descriptor, BlurMaterialMode mode = BlurMaterialMode.Base)
         {
             m_CommandBuffer = commandBuffer;
-            m_Target = target;
+            m_Input = input;
+            m_Output = output;
             m_Settings = settings;
             m_Descriptor = descriptor;
+
+            if (commandBuffer == null) return;
+            
+            switch (mode)
+            {
+                case BlurMaterialMode.Base:
+                    commandBuffer.DisableShaderKeyword(enableMaskBlurKeyword);
+                    break;
+                
+                case BlurMaterialMode.Mask:
+                    commandBuffer.EnableShaderKeyword(enableMaskBlurKeyword);
+                    // material.EnableKeyword("_PostBlur_Mask_ON");
+                    // material.SetFloat(enableMaskBlurID, 1);
+                    break;
+            }
+        }
+
+        public void SetMaskBlurTexture(RTHandle rt)
+        {
+            if (m_CommandBuffer == null || rt == null) 
+                return;
+            
+            m_CommandBuffer.SetGlobalTexture(maskBlurTextureID, rt);
         }
 
         public void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
-            if (m_CommandBuffer == null || m_Target == null || m_Settings == null || !material) 
+            if (m_CommandBuffer == null || m_Input == null || m_Output == null || m_Settings == null || !material) 
                 return;
 
             switch (m_Settings.blurType)
@@ -132,7 +174,7 @@ namespace RoxamiRPCore
             RenderingUtils.ReAllocateIfNeeded(ref blurSampleRTA[0], m_Descriptor, FilterMode.Bilinear, name: blurSampleRTAName + 0);
             RenderingUtils.ReAllocateIfNeeded(ref blurSampleRTB[0], m_Descriptor, FilterMode.Bilinear, name: blurSampleRTBName + 0);
             
-            var rtA = m_Settings.downSample == 0 ? m_Target : blurSampleRTA[0];
+            var rtA = m_Settings.downSample == 0 ? m_Input : blurSampleRTA[0];
             var rtB = blurSampleRTB[0];
             for (int i = 0; i < m_Settings.iterations; i++)
             {
@@ -141,7 +183,7 @@ namespace RoxamiRPCore
                 if (isA)
                 {
                     Draw(
-                        i == 0 ? m_Target : rtA, 
+                        i == 0 ? m_Input : rtA, 
                         rtB, 
                         BlurPassIndex.Box);
                 }
@@ -149,7 +191,7 @@ namespace RoxamiRPCore
                 {
                     Draw( 
                         rtB, 
-                        i == m_Settings.iterations - 1 ? m_Target : rtA,
+                        i == m_Settings.iterations - 1 ? m_Output : rtA,
                         BlurPassIndex.Box);
                 }
             }
@@ -165,7 +207,7 @@ namespace RoxamiRPCore
             RenderingUtils.ReAllocateIfNeeded(ref blurSampleRTA[0], m_Descriptor, FilterMode.Bilinear, name: blurSampleRTAName + 0);
             RenderingUtils.ReAllocateIfNeeded(ref blurSampleRTB[0], m_Descriptor, FilterMode.Bilinear, name: blurSampleRTBName + 0);
             
-            var rtA = m_Settings.downSample == 0 ? m_Target : blurSampleRTA[0];
+            var rtA = m_Settings.downSample == 0 ? m_Input : blurSampleRTA[0];
             var rtB = blurSampleRTB[0];
             for (int i = 0; i < m_Settings.iterations; i++)
             {
@@ -174,7 +216,7 @@ namespace RoxamiRPCore
                   1.0f / Screen.width * m_Settings.blurRadios, 0f, 0.0f, 0.0f));
                 
                 Draw(
-                    i == 0 ? m_Target : rtA, 
+                    i == 0 ? m_Input : rtA, 
                     rtB, 
                     BlurPassIndex.Gaussian);
                 
@@ -184,7 +226,7 @@ namespace RoxamiRPCore
                 
                 Draw(
                     rtB, 
-                    i == m_Settings.iterations - 1 ? m_Target : rtA, 
+                    i == m_Settings.iterations - 1 ? m_Output : rtA, 
                     BlurPassIndex.Gaussian);
             }
         }

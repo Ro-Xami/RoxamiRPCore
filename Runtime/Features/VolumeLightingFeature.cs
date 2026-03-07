@@ -344,7 +344,7 @@ namespace RoxamiRPCore
 
             void DrawBlur(ScriptableRenderContext context, ref RenderingData renderingData)
             {
-                m_BlurRenderPass.Setup(cmd, volumeLightingRT, m_RayMarchSettings.blurSettings, m_RenderTextureDescriptor);
+                m_BlurRenderPass.Setup(cmd, volumeLightingRT, volumeLightingRT, m_RayMarchSettings.blurSettings, m_RenderTextureDescriptor);
                 m_BlurRenderPass.Execute(context, ref renderingData);
                 
                 cmd.SetRenderTarget(renderingData.cameraData.renderer.cameraColorTargetHandle);

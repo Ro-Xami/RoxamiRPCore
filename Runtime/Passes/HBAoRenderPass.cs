@@ -136,7 +136,7 @@ namespace RoxamiRPCore
 
         private void Blur(ScriptableRenderContext context, RenderingData renderingData)
         {
-            m_BlurRenderPass.Setup(cmd, hbaoRT, m_BlurSettings, hbaoDescriptor);
+            m_BlurRenderPass.Setup(cmd,hbaoRT, hbaoRT, m_BlurSettings, hbaoDescriptor);
             m_BlurRenderPass.Execute(context, ref renderingData);
         }
 
