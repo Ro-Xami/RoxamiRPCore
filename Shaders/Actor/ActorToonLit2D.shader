@@ -1,11 +1,11 @@
-Shader "RoxamiRP/Actor/ActorToonLit"
+Shader "RoxamiRP/Actor/ActorToonLit2D"
 {
     Properties
     {
-        [MainTexture] _BaseMap("Albedo", 2D) = "white" {}
+        [PerRendererData] _BaseMap("Albedo", 2D) = "white" {}
         [MainColor] _BaseColor("Color", Color) = (1,1,1,1)
         
-        _ActorLut ("Actor Lut", 2D) = "white" {}
+        //_ActorLut ("Actor Lut", 2D) = "white" {}
 
         [Space(10)]
         [Header(Normal Settings)]
@@ -29,10 +29,10 @@ Shader "RoxamiRP/Actor/ActorToonLit"
        
         [Space(10)]
         [Header(Rendering Settings)]
-        [Toggle(_ALPHATEST_ON)] _AlphaClip("Alpha Clip", Float) = 0.0
+        [Toggle(_ALPHATEST_ON)] _AlphaClip("Alpha Clip", Float) = 1.0
         _Cutoff("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
 
-        [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull Mode", Float) = 2.0
+        //[Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull Mode", Float) = 2.0
         
         [ToggleUI] _ReceiveShadows("Receive Shadows", Float) = 1.0
         [ToggleOff] _SpecularHighlights("Specular Highlights", Float) = 1.0
@@ -61,7 +61,7 @@ Shader "RoxamiRP/Actor/ActorToonLit"
             
             ZWrite On
             ZTest LEqual
-            Cull [_Cull]
+            Cull Off//[_Cull]
             
             Blend One One
 
@@ -91,7 +91,7 @@ Shader "RoxamiRP/Actor/ActorToonLit"
             #pragma multi_compile_instancing
             
             #pragma vertex ActorToonVertex
-            #pragma fragment ActorToonForwardFragment
+            #pragma fragment ActorToon2DForwardFragment
             #include "Packages/roxamirpcore/Shaders/Actor/hlsl/ActorToonInput.hlsl"
             #include "Packages/roxamirpcore/Shaders/Actor/hlsl/ActorToonPass.hlsl"
             ENDHLSL
@@ -109,7 +109,7 @@ Shader "RoxamiRP/Actor/ActorToonLit"
             // Render State Commands
             ZWrite On
             ZTest LEqual
-            Cull [_Cull]
+            Cull Off//[_Cull]
             
             Stencil
             {
@@ -169,7 +169,7 @@ Shader "RoxamiRP/Actor/ActorToonLit"
             ZWrite On
             ZTest LEqual
             ColorMask 0
-            Cull [_Cull]
+            Cull Off//[_Cull]
 
             HLSLPROGRAM
             #pragma target 2.0

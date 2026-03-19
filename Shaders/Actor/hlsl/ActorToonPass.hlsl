@@ -9,6 +9,9 @@
 #endif
 
 #include "Packages/roxamirpcore/Shaders/Actor/hlsl/ActorToonInput.hlsl"
+#include "Packages/roxamirpcore/Shaders/Core/ClusteredLightingCore.hlsl"
+
+#define _RoxamiF0 0.04f
 
 // keep this file in sync with LitForwardPass.hlsl
 
@@ -220,7 +223,7 @@ half4 ActorFaceForwardFragment(Varyings input) : SV_Target
     return half4(color, 1);
 }
 
-half4 ActoToonForwardFragment(Varyings input) : SV_Target
+half4 ActorToonForwardFragment(Varyings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
@@ -244,17 +247,42 @@ half4 ActoToonForwardFragment(Varyings input) : SV_Target
 
     half rim = DepthRim(inputData) * step(0.5, NdotL);
     
-    half3 spec = 0.04f * DirectBRDFSpecular(brdfData, inputData.normalWS, mainLight.direction, inputData.viewDirectionWS);
+    half3 spec = _RoxamiF0 * DirectBRDFSpecular(brdfData, inputData.normalWS, mainLight.direction, inputData.viewDirectionWS);
     
     half3 color = surfaceData.albedo.rgb * mainLight.color * toonNdotL + rim.xxx + spec * NdotL;
     
     return half4(color, 1);
-    
-    BRDFData clear = (BRDFData) 0;
-    half3 test = LightingPhysicallyBased(brdfData, clear, mainLight.color, mainLight.direction, 1, 
-        inputData.normalWS, inputData.viewDirectionWS, 0, false);
+}
 
-    return half4(test, 1);
+half4 ActorToon2DForwardFragment(Varyings input) : SV_Target
+{
+    UNITY_SETUP_INSTANCE_ID(input);
+    UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+    
+    #ifdef LOD_FADE_CROSSFADE
+    LODFadeCrossFade(input.positionCS);
+    #endif
+    
+    SurfaceData surfaceData;
+    InitializeStandardLitSurfaceData(input, surfaceData);
+    
+    InputData inputData;
+    InitializeInputData(input, surfaceData.normalTS, inputData);
+    
+    // BRDFData brdfData;
+    // InitializeBRDFData(surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.alpha, brdfData);
+    
+    Light mainLight = GetMainLight();
+    //half NdotL = saturate(dot(mainLight.direction, inputData.normalWS));
+    //half3 spec = _RoxamiF0 * DirectBRDFSpecular(brdfData, inputData.normalWS, mainLight.direction, inputData.viewDirectionWS);
+    
+    half3 additionalLightColor = GetClusteredLightingDistanceAttenuation(inputData.normalizedScreenSpaceUV, inputData.positionWS) * surfaceData.albedo.rgb;
+    
+    half3 color = 0;
+    color += max(mainLight.color, 0.35f) * surfaceData.albedo.rgb;
+    color += min(2.0f, additionalLightColor) * surfaceData.albedo.rgb;
+    
+    return half4(color, 1);
 }
 
 #endif
