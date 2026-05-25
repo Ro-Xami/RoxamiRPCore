@@ -4,6 +4,7 @@ Shader "RoxamiRP/Scene/ToonLit"
     {
         [MainTexture] _BaseMap("Albedo", 2D) = "white" {}
         [MainColor] _BaseColor("Color", Color) = (1,1,1,1)
+        _BasePower("Base Power", Range(0.01, 20)) = 1
 
         [Space(10)]
         [Header(Normal Settings)]
@@ -25,6 +26,10 @@ Shader "RoxamiRP/Scene/ToonLit"
         _EmissionMap("Emission", 2D) = "white" {}
         [HDR] _EmissionColor("Color", Color) = (0,0,0)
        
+        [Space(10)]
+        [Header(UV Settings)]
+        [KeywordEnum(UV, PositionWS_XY, PositionWS_XZ, PositionWS_YZ)] _UVSelect("UV Select", Float) = 0
+
         [Space(10)]
         [Header(Rendering Settings)]
         [Toggle(_ALPHATEST_ON)] _AlphaClip("Alpha Clip", Float) = 0.0
@@ -80,6 +85,8 @@ Shader "RoxamiRP/Scene/ToonLit"
             // Shader Stages
             #pragma vertex LitGBufferPassVertex
             #pragma fragment LitGBufferPassFragment
+            
+            #pragma multi_compile _ _DEBUG_ALBEDO_OUT_EMISSION
 
             // -------------------------------------
             // Material Keywords
@@ -87,6 +94,7 @@ Shader "RoxamiRP/Scene/ToonLit"
             #pragma shader_feature_local_fragment _ALPHATEST_ON
             #pragma shader_feature_local_fragment _EMISSION
             #pragma shader_feature_local_fragment _METALLICSPECGLOSSMAP
+            #pragma shader_feature_local _UVSELECT_UV _UVSELECT_POSITIONWS_XY _UVSELECT_POSITIONWS_XZ _UVSELECT_POSITIONWS_YZ
 
             #pragma shader_feature_local_fragment _SPECULARHIGHLIGHTS_OFF
             #pragma shader_feature_local_fragment _ENVIRONMENTREFLECTIONS_OFF
@@ -137,6 +145,7 @@ Shader "RoxamiRP/Scene/ToonLit"
             // -------------------------------------
             // Material Keywords
             #pragma shader_feature_local _ALPHATEST_ON
+            #pragma shader_feature_local _UVSELECT_UV _UVSELECT_POSITIONWS_XY _UVSELECT_POSITIONWS_XZ _UVSELECT_POSITIONWS_YZ
             //#pragma shader_feature_local_fragment _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
 
             //--------------------------------------

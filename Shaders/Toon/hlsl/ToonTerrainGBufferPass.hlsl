@@ -93,7 +93,7 @@ Varyings ToonTerrainGBufferPassVertex(Attributes input)
     #ifdef _SAMPLEINPUT_UV
     #else
     float3 face = float3(0, 0, 0);
-    half3 absNormal = abs(input.normalOS);
+    half3 absNormal = abs(output.normalWS);
     face.x = step(absNormal.y, absNormal.x) * step(absNormal.z, absNormal.x);
     face.y = step(absNormal.z, absNormal.y) * (1 - face.x);
     face.z = 1 - face.x - face.y;

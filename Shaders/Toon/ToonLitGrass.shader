@@ -1,9 +1,10 @@
-Shader "RoxamiRP/Scene/ToonLit_Grass"
+Shader "RoxamiRP/Scene/ToonLitGrass"
 {
     Properties
     {
         [MainTexture] _BaseMap("Albedo", 2D) = "white" {}
         [MainColor] _BaseColor("Color", Color) = (1,1,1,1)
+        _BasePower("Base Power", Range(0.01, 20)) = 1
 
         [Space(10)]
         [Header(Normal Settings)]
@@ -180,51 +181,51 @@ Shader "RoxamiRP/Scene/ToonLit_Grass"
             ENDHLSL
         }
 
-        Pass
-        {
-            Name "DepthOnly"
-            Tags
-            {
-                "LightMode" = "DepthOnly"
-            }
-
-            // -------------------------------------
-            // Render State Commands
-            ZWrite On
-            ColorMask R
-            Cull[_Cull]
-
-            HLSLPROGRAM
-            #pragma target 2.0
-
-            #define _APPLY_GLOBAL_WIND
-            #pragma shader_feature_local _WINDWEIGHTINPUT_VCOLOR _WINDWEIGHTINPUT_MASK _WINDWEIGHTINPUT_POSITIONOS _WINDWEIGHTINPUT_UV
-
-            // -------------------------------------
-            // Shader Stages
-            #pragma vertex DepthOnlyVertex
-            #pragma fragment DepthOnlyFragment
-
-            // -------------------------------------
-            // Material Keywords
-            #pragma shader_feature_local _ALPHATEST_ON
-            //#pragma shader_feature_local_fragment _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
-
-            // -------------------------------------
-            // Unity defined keywords
-            #pragma multi_compile_fragment _ LOD_FADE_CROSSFADE
-
-            //--------------------------------------
-            // GPU Instancing
-            #pragma multi_compile_instancing
-            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
-
-            // -------------------------------------
-            // Includes
-            #include "Packages/roxamirpcore/Shaders/Toon/hlsl/ToonLitInput.hlsl"
-            #include "Packages/roxamirpcore/Shaders/Toon/hlsl/ToonLitDepthOnlyPass.hlsl"
-            ENDHLSL
-        }
+//        Pass
+//        {
+//            Name "DepthOnly"
+//            Tags
+//            {
+//                "LightMode" = "DepthOnly"
+//            }
+//
+//            // -------------------------------------
+//            // Render State Commands
+//            ZWrite On
+//            ColorMask R
+//            Cull[_Cull]
+//
+//            HLSLPROGRAM
+//            #pragma target 2.0
+//
+//            #define _APPLY_GLOBAL_WIND
+//            #pragma shader_feature_local _WINDWEIGHTINPUT_VCOLOR _WINDWEIGHTINPUT_MASK _WINDWEIGHTINPUT_POSITIONOS _WINDWEIGHTINPUT_UV
+//
+//            // -------------------------------------
+//            // Shader Stages
+//            #pragma vertex DepthOnlyVertex
+//            #pragma fragment DepthOnlyFragment
+//
+//            // -------------------------------------
+//            // Material Keywords
+//            #pragma shader_feature_local _ALPHATEST_ON
+//            //#pragma shader_feature_local_fragment _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
+//
+//            // -------------------------------------
+//            // Unity defined keywords
+//            #pragma multi_compile_fragment _ LOD_FADE_CROSSFADE
+//
+//            //--------------------------------------
+//            // GPU Instancing
+//            #pragma multi_compile_instancing
+//            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
+//
+//            // -------------------------------------
+//            // Includes
+//            #include "Packages/roxamirpcore/Shaders/Toon/hlsl/ToonLitInput.hlsl"
+//            #include "Packages/roxamirpcore/Shaders/Toon/hlsl/ToonLitDepthOnlyPass.hlsl"
+//            ENDHLSL
+//        }
     }
 
     FallBack "Hidden/Universal Render Pipeline/FallbackError"

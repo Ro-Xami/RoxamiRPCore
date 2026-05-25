@@ -37,6 +37,9 @@ namespace RoxamiRPCore
         
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
+            if (renderingData.cameraData.camera.cameraType != CameraType.Game)
+                return;
+            
             cmd = CommandBufferPool.Get();
             using (new ProfilingScope(cmd, profilingSampler))
             {

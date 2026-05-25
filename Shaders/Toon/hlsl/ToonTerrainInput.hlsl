@@ -97,6 +97,8 @@ void InitializedToonTerrainSurfaceData(inout SurfaceData surfaceData, float2 con
     surfaceData.occlusion = mask.b;
     surfaceData.alpha = 1;
     surfaceData.specular = half3(1, 1, 1);
+    
+    // surfaceData.albedo = control.r + control.g + control.b + control.a;
 }
 
 #endif

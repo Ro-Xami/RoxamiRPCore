@@ -36,7 +36,7 @@ namespace RoxamiRPCore
             
             actorForwardRenderPass = new ActorForwardRenderPass(actorForwardSettings, RenderPassEvent.AfterRenderingOpaques);
             
-            globalFogRenderPass = new GlobalFogRenderPass(RenderPassEvent.BeforeRenderingSkybox);
+            globalFogRenderPass = new GlobalFogRenderPass(RenderPassEvent.AfterRenderingSkybox);
             
             pixelStyleRenderPass = new PixelStyleRenderPass(pixelSettings);
         }

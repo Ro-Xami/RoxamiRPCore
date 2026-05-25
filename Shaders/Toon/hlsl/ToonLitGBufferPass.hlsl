@@ -75,8 +75,9 @@ inline void InitializeStandardLitSurfaceData(Varyings input, out SurfaceData out
     outSurfaceData.alpha = Alpha(albedoAlpha.a, _BaseColor, _Cutoff);
 
     half4 specGloss = SampleMetallicSpecGloss(uv, albedoAlpha.a);
-    outSurfaceData.albedo = albedoAlpha.rgb * _BaseColor.rgb;
+    outSurfaceData.albedo = pow(albedoAlpha.rgb, _BasePower) * _BaseColor.rgb;
     outSurfaceData.albedo = AlphaModulate(outSurfaceData.albedo, outSurfaceData.alpha);
+    
 
     outSurfaceData.metallic = specGloss.r;
     outSurfaceData.smoothness = specGloss.g;
@@ -156,7 +157,15 @@ Varyings LitGBufferPassVertex(Attributes input)
     OUTPUT_LIGHTMAP_UV(input.staticLightmapUV, unity_LightmapST, output.staticLightmapUV);
     OUTPUT_SH(output.normalWS.xyz, output.vertexSH);
 
+    #if defined(_UVSELECT_POSITIONWS_XY)
+    output.uv = output.positionWS.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
+    #elif defined(_UVSELECT_POSITIONWS_XZ)
+    output.uv = output.positionWS.xz * _BaseMap_ST.xy + _BaseMap_ST.zw;
+    #elif defined(_UVSELECT_POSITIONWS_YZ)
+    output.uv = output.positionWS.yz * _BaseMap_ST.xy + _BaseMap_ST.zw;
+    #else
     output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
+    #endif
     output.color = input.color;
 
     return output;
@@ -170,6 +179,10 @@ FragmentOutput LitGBufferPassFragment(Varyings input)
 
     SurfaceData surfaceData;
     InitializeStandardLitSurfaceData(input, surfaceData);
+    
+#ifdef _DEBUG_ALBEDO_OUT_EMISSION
+    surfaceData.albedo = surfaceData.emission;
+#endif
 
 #ifdef LOD_FADE_CROSSFADE
     LODFadeCrossFade(input.positionCS);

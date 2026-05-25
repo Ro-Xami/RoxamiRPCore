@@ -24,33 +24,14 @@ struct Attributes
 
 struct Varyings
 {
-    #if defined(_ALPHATEST_ON)
-        float2 uv       : TEXCOORD0;
-    #endif
+    float2 uv           : TEXCOORD0;
+    float3 positionWS   : TEXCOORD1;
     float4 positionCS   : SV_POSITION;
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
-float4 GetShadowPositionHClip(Attributes input)
+float4 GetShadowPositionHClip(float3 positionWS, float3 normalWS)
 {
-    float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
-
-    #if defined(_APPLY_GLOBAL_WIND)
-        float weight = 1.0;
-        #if defined(_WINDWEIGHTINPUT_VCOLOR)
-        weight = input.color.r;
-        #elif defined(_WINDWEIGHTINPUT_MASK)
-        weight = SAMPLE_TEXTURE2D_LOD(_WindWeightMask, sampler_WindWeightMask, input.texcoord, 1).r;
-        #elif defined(_WINDWEIGHTINPUT_POSITIONOS)
-        weight = input.positionOS.y;
-        #elif defined(_WINDWEIGHTINPUT_UV)
-        weight = input.texcoord.y;
-        #endif
-                
-        ApplyGlobalWind(positionWS, weight * _WindWeightFactor);
-    #endif
-    
-    float3 normalWS = TransformObjectToWorldNormal(input.normalOS);
 
 #if _CASTING_PUNCTUAL_LIGHT_SHADOW
     float3 lightDirectionWS = normalize(_LightPosition - positionWS);
@@ -75,11 +56,39 @@ Varyings ShadowPassVertex(Attributes input)
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_TRANSFER_INSTANCE_ID(input, output);
 
-    #if defined(_ALPHATEST_ON)
-        output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
+    float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+
+    #if defined(_APPLY_GLOBAL_WIND)
+        float weight = 1.0;
+        #if defined(_WINDWEIGHTINPUT_VCOLOR)
+        weight = input.color.r;
+        #elif defined(_WINDWEIGHTINPUT_MASK)
+        weight = SAMPLE_TEXTURE2D_LOD(_WindWeightMask, sampler_WindWeightMask, input.texcoord, 1).r;
+        #elif defined(_WINDWEIGHTINPUT_POSITIONOS)
+        weight = input.positionOS.y;
+        #elif defined(_WINDWEIGHTINPUT_UV)
+        weight = input.texcoord.y;
+        #endif
+                
+        ApplyGlobalWind(positionWS, weight * _WindWeightFactor);
     #endif
 
-    output.positionCS = GetShadowPositionHClip(input);
+    output.positionWS = positionWS;
+
+    #ifndef ROXAMI_TERRAIN_INPUT_INCLUDED
+        #if defined(_UVSELECT_POSITIONWS_XY)
+        output.uv = positionWS.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
+        #elif defined(_UVSELECT_POSITIONWS_XZ)
+        output.uv = positionWS.xz * _BaseMap_ST.xy + _BaseMap_ST.zw;
+        #elif defined(_UVSELECT_POSITIONWS_YZ)
+        output.uv = positionWS.yz * _BaseMap_ST.xy + _BaseMap_ST.zw;
+        #else
+        output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
+        #endif
+    #endif
+
+    float3 normalWS = TransformObjectToWorldNormal(input.normalOS);
+    output.positionCS = GetShadowPositionHClip(positionWS, normalWS);
     return output;
 }
 

@@ -11,6 +11,8 @@ CBUFFER_START(UnityPerMaterial)
 
 float4 _BaseMap_ST;
 half4 _BaseColor;
+half _BasePower;
+
 half _Smoothness;
 half _Metallic;
 half _OcclusionStrength;
@@ -108,7 +110,7 @@ half3 SampleNormal(float2 uv, TEXTURE2D_PARAM(bumpMap, sampler_bumpMap), half sc
 half3 SampleEmission(float2 uv, half3 emissionColor, TEXTURE2D_PARAM(emissionMap, sampler_emissionMap))
 {
     #ifndef _EMISSION
-    return 0;
+    return emissionColor;
     #else
     return SAMPLE_TEXTURE2D(emissionMap, sampler_emissionMap, uv).rgb * emissionColor;
     #endif
