@@ -163,9 +163,12 @@ Varyings LitGBufferPassVertex(Attributes input)
     output.uv = output.positionWS.xz * _BaseMap_ST.xy + _BaseMap_ST.zw;
     #elif defined(_UVSELECT_POSITIONWS_YZ)
     output.uv = output.positionWS.yz * _BaseMap_ST.xy + _BaseMap_ST.zw;
+    #elif defined(_UVSELECT_NORMALWS_STEP)
+    output.uv = GetNormalPositionHardUV(output.normalWS, output.positionWS) * _BaseMap_ST.xy + _BaseMap_ST.zw;
     #else
     output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
     #endif
+    
     output.color = input.color;
 
     return output;

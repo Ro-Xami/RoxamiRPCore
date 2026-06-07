@@ -16,6 +16,16 @@ float Hash21(uint2 p)
     return h32 * (1.0 / float(0xffffffffU));
 }
 
+float2 GetNormalPositionHardUV(float3 normal, float3 position)
+{
+    float3 face = float3(0, 0, 0);
+    half3 absNormal = abs(normal);
+    face.x = step(absNormal.y, absNormal.x) * step(absNormal.z, absNormal.x);
+    face.y = step(absNormal.z, absNormal.y) * (1 - face.x);
+    face.z = 1 - face.x - face.y;
+    return position.xy * face.z + position.zy * face.x + position.xz * face.y;
+}
+
 //========================================================================================//
 //====================================Space Transform=====================================//
 //========================================================================================//

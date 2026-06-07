@@ -28,7 +28,7 @@ Shader "RoxamiRP/Scene/ToonLit"
        
         [Space(10)]
         [Header(UV Settings)]
-        [KeywordEnum(UV, PositionWS_XY, PositionWS_XZ, PositionWS_YZ)] _UVSelect("UV Select", Float) = 0
+        [KeywordEnum(UV, PositionWS_XY, PositionWS_XZ, PositionWS_YZ, NormalWS_Step)] _UVSelect("UV Select", Float) = 0
 
         [Space(10)]
         [Header(Rendering Settings)]
@@ -94,7 +94,7 @@ Shader "RoxamiRP/Scene/ToonLit"
             #pragma shader_feature_local_fragment _ALPHATEST_ON
             #pragma shader_feature_local_fragment _EMISSION
             #pragma shader_feature_local_fragment _METALLICSPECGLOSSMAP
-            #pragma shader_feature_local _UVSELECT_UV _UVSELECT_POSITIONWS_XY _UVSELECT_POSITIONWS_XZ _UVSELECT_POSITIONWS_YZ
+            #pragma shader_feature_local _UVSELECT_UV _UVSELECT_POSITIONWS_XY _UVSELECT_POSITIONWS_XZ _UVSELECT_POSITIONWS_YZ _UVSELECT_NORMALWS_STEP
 
             #pragma shader_feature_local_fragment _SPECULARHIGHLIGHTS_OFF
             #pragma shader_feature_local_fragment _ENVIRONMENTREFLECTIONS_OFF

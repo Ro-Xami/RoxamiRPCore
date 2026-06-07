@@ -43,7 +43,7 @@ Shader "RoxamiRP/Actor/ActorToonLit2D"
     {
         Tags
         {
-            "RenderType" = "Opaque"
+            "RenderType" = "Transparent"
             "RenderPipeline" = "UniversalPipeline"
             "UniversalMaterialType" = "Lit"
             "IgnoreProjector" = "True"
@@ -59,16 +59,16 @@ Shader "RoxamiRP/Actor/ActorToonLit2D"
                 "LightMode" = "ActorForward"
             }
             
-            ZWrite On
+            ZWrite Off
             ZTest LEqual
             Cull Off//[_Cull]
             
-            Blend One One
+            Blend SrcAlpha OneMinusSrcAlpha
 
             HLSLPROGRAM
             #pragma target 4.5
             #pragma shader_feature_local _NORMALMAP
-            #pragma shader_feature_local_fragment _ALPHATEST_ON
+            // #pragma shader_feature_local_fragment _ALPHATEST_ON
             #pragma shader_feature_local_fragment _EMISSION
             #pragma shader_feature_local_fragment _METALLICSPECGLOSSMAP
 

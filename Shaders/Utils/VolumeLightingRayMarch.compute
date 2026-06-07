@@ -3,10 +3,11 @@
 #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
 #pragma multi_compile _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
 
-RWTexture2D<float> _VolumeLightingTexture;
 #include "Packages/roxamirpcore/Shaders/Core/Common.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+
+RWTexture2D<float> _VolumeLightingTexture;
 
 float4 _texelSize;
 float4 _volumeLightingParams;

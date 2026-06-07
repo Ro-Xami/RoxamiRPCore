@@ -31,13 +31,28 @@ namespace RoxamiRPCore
         
         private static readonly int fogParamsID = Shader.PropertyToID("_RoxamiGlobalFogParams");
         private static readonly int fogColorID = Shader.PropertyToID("_RoxamiGlobalFogColor");
-        
-        const string bufferName = "GlobalFogPass";
+
         private CommandBuffer cmd;
+        
+        private RoxamiGlobalFog volume;
+
+        public void UpdateVolume(RoxamiGlobalFog volume)
+        {
+            this.volume = volume;
+        }
+        
+        public static void DisableKeyword(CommandBuffer commandBuffer)
+        {
+            foreach (var m_Keyword in RoxamiShaderConst.globalFogKeywords)
+            {
+                commandBuffer.DisableShaderKeyword(m_Keyword);
+            }
+            commandBuffer.EnableShaderKeyword(RoxamiShaderConst.globalFogKeywords[(int)RoxamiFogMode.None]);
+        }
         
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
-            if (renderingData.cameraData.camera.cameraType != CameraType.Game)
+            if (volume == null || !material)
                 return;
             
             cmd = CommandBufferPool.Get();
@@ -57,17 +72,9 @@ namespace RoxamiRPCore
 
         void RenderFog()
         {
-            var settings = VolumeManager.instance.stack.GetComponent<RoxamiGlobalFog>();
-
-            UpdateFogShaderData(settings);
+            EnableFogKeyword(RoxamiShaderConst.globalFogKeywords[(int)volume.fogMode.value]);
             
-            if (!settings.IsActive() || !material)
-            {
-                EnableFogKeyword(RoxamiShaderConst.globalFogKeywords[(int)RoxamiFogMode.None]);
-                return;
-            }
-
-            EnableFogKeyword(RoxamiShaderConst.globalFogKeywords[(int)settings.fogMode.value]);
+            UpdateFogShaderData(volume);
 
             RoxamiCommonUtils.DrawFullScreenTriangle(cmd, material, 0);
         }
