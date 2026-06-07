@@ -13,11 +13,13 @@ namespace RoxamiRPCore
         [Header("Clustered Lighting")]
         public bool isActive;
         public bool isClusteredDebug;
+        [Range(0, 0.999f)] public float clusteredDebugIndexZ = 0;
         public Material deferredMaterial;
         public ComputeShader computeShader;
         [Range(1, 99)] public int maxClusterLightIndex = 10;
         [Range(1, 5)] public int threadGroupX = 10;
         [Range(1, 5)] public int threadGroupY = 10;
+        [Range(1, 5)] public int threadGroupZ = 10;
         
         [Header("Rendering Debug")]
         public bool isRenderingDebug;
@@ -52,10 +54,13 @@ namespace RoxamiRPCore
 
             clusterCountX = clusteredSettings.threadGroupX * numThreadsX;
             clusterCountY = clusteredSettings.threadGroupY * numThreadsY;
-            var clusterLightCountBufferCount = clusterCountX * clusterCountY;
+            clusterCountZ = clusteredSettings.threadGroupZ * numThreadsZ;
+            var clusterLightCountBufferCount = clusterCountX * clusterCountY * clusterCountZ;
             var clusterLightIndexBufferCount = clusterLightCountBufferCount * clusteredSettings.maxClusterLightIndex;
             clusterLightCountBuffer = new ComputeBuffer(clusterLightCountBufferCount, sizeof(int));
             clusterLightIndexBuffer = new ComputeBuffer(clusterLightIndexBufferCount, sizeof(int));
+            
+            Shader.SetGlobalInt(maxClusterCountID, clusterCountX * clusterCountY * clusterCountZ);
         }
 
         //ClusteredLights
@@ -64,18 +69,32 @@ namespace RoxamiRPCore
         private const string cullingKernelName = "ClusteredLights";
         private const int numThreadsX = 8;
         private const int numThreadsY = 8;
+        private const int numThreadsZ = 1;
         
         private static readonly int clusterLightCountBufferID = Shader.PropertyToID("_ClusterLightCountBuffer");
         private static readonly int clusterLightIndexBufferID = Shader.PropertyToID("_ClusterLightIndexBuffer");
         private static readonly int maxClusterLightIndexID = Shader.PropertyToID("_MaxClusterLightIndex");
         private static readonly int clusterCountID = Shader.PropertyToID("_ClusterCount");
-        private static readonly int cameraRightDirID = Shader.PropertyToID("_CameraRightDir");
+        private static readonly int maxClusterCountID = Shader.PropertyToID("_MaxClusterCount");
+        private static readonly int cameraViewportPointsWsID = Shader.PropertyToID("_CameraViewportPointsWS");
+        private static readonly int clusteredDebugIndexZID = Shader.PropertyToID("_ClusteredDebugIndexZ");
 
         private readonly ComputeShader cs;
         private readonly int clusterCullingKernel;
-        private readonly int clusterCountX, clusterCountY;
+        private readonly int clusterCountX, clusterCountY, clusterCountZ;
         private readonly ComputeBuffer clusterLightCountBuffer;
         private readonly ComputeBuffer clusterLightIndexBuffer;
+
+        //    7 -------- 6
+        //   /|         /|
+        //  / |        / |
+        // 3 -------- 2  |
+        // |  |       |  |
+        // |  4 ------|--5
+        // | /        | /
+        // |/         |/
+        // 0 -------- 1
+        private readonly Vector4[] cameraViewportPointsWS = new Vector4[8];
 
         private static Material m_DeferredToonMaterial;
         private static Material DeferredToonMaterial
@@ -90,7 +109,7 @@ namespace RoxamiRPCore
             }
         }
 
-        private static string[] renderingDebugKeywords = new string[]
+        private static readonly string[] renderingDebugKeywords = new string[]
         {
             "_RoDebug_None",
             "_RoDebug_Albedo",
@@ -121,7 +140,7 @@ namespace RoxamiRPCore
             using (new ProfilingScope(cmd, profilingSampler))
             {
                 cmd.SetGlobalFloat(RoxamiShaderConst.roxamiAdditionalLightsCountID, renderingData.lightData.additionalLightsCount);
-                cmd.SetGlobalVector(clusterCountID, new Vector4(clusterCountX, clusterCountY));
+                cmd.SetGlobalVector(clusterCountID, new Vector4(clusterCountX, clusterCountY, clusterCountZ));
                 cmd.SetGlobalInt(maxClusterLightIndexID, clusteredSettings.maxClusterLightIndex);
                 
                 ClusteredLights(renderingData);
@@ -147,15 +166,28 @@ namespace RoxamiRPCore
 
         private void ClusteredLights(RenderingData renderingData)
         {
-            cmd.SetGlobalVector(cameraRightDirID, new Vector4(
-                renderingData.cameraData.camera.transform.right.x,
-                renderingData.cameraData.camera.transform.right.y,
-                renderingData.cameraData.camera.transform.right.z,
-                renderingData.cameraData.camera.aspect));
-                
+            var camera = renderingData.cameraData.camera;
+            
+            //获得摄像机视锥体的八个角点
+            float near = camera.nearClipPlane;
+            float far  = camera.farClipPlane;
+            
+            // Near
+            cameraViewportPointsWS[0] = camera.ViewportToWorldPoint(new Vector3(0, 0, near)); // Left Bottom
+            cameraViewportPointsWS[1] = camera.ViewportToWorldPoint(new Vector3(1, 0, near)); // Right Bottom
+            cameraViewportPointsWS[2] = camera.ViewportToWorldPoint(new Vector3(1, 1, near)); // Right Top
+            cameraViewportPointsWS[3] = camera.ViewportToWorldPoint(new Vector3(0, 1, near)); // Left Top
+
+            // Far
+            cameraViewportPointsWS[4] = camera.ViewportToWorldPoint(new Vector3(0, 0, far)); // Left Bottom
+            cameraViewportPointsWS[5] = camera.ViewportToWorldPoint(new Vector3(1, 0, far)); // Right Bottom
+            cameraViewportPointsWS[6] = camera.ViewportToWorldPoint(new Vector3(1, 1, far)); // Right Top
+            cameraViewportPointsWS[7] = camera.ViewportToWorldPoint(new Vector3(0, 1, far)); // Left Top
+            
+            cmd.SetComputeVectorArrayParam(cs, cameraViewportPointsWsID, cameraViewportPointsWS);
             cmd.SetComputeBufferParam(cs, clusterCullingKernel, clusterLightCountBufferID, clusterLightCountBuffer);
             cmd.SetComputeBufferParam(cs, clusterCullingKernel, clusterLightIndexBufferID, clusterLightIndexBuffer);
-            cmd.DispatchCompute(cs, clusterCullingKernel, clusteredSettings.threadGroupX, clusteredSettings.threadGroupY, 1);
+            cmd.DispatchCompute(cs, clusterCullingKernel, clusteredSettings.threadGroupX, clusteredSettings.threadGroupY, clusteredSettings.threadGroupZ);
         }
         
         private void DeferredLighting(ScriptableRenderContext context, ref RenderingData renderingData)
@@ -183,6 +215,7 @@ namespace RoxamiRPCore
 #if UNITY_EDITOR
             if (clusteredSettings.isClusteredDebug)
             {
+                cmd.SetGlobalFloat(clusteredDebugIndexZID, clusteredSettings.clusteredDebugIndexZ);
                 cmd.DrawMesh(RoxamiCommonUtils.FullScreenMesh, Matrix4x4.identity, DeferredToonMaterial, 0, (int)RoxamiToonDeferredPassInput.ClusteredDebug);
             }
 #endif

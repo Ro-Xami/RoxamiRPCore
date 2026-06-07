@@ -22,6 +22,12 @@ float2 GetScreenUV(Varyings input)
 }
 
 TEXTURE2D_X_HALF(_HBAoTexture);
+half _HbaoDirectionalIntensity;
+
+float SampleHBAO(float2 screenUV)
+{
+    return saturate(1 - SAMPLE_TEXTURE2D_X_LOD(_HBAoTexture, my_point_clamp_sampler, screenUV, 0).r);
+}
 
 half4 ToonDeferredShading(Varyings input) : SV_Target
 {
@@ -58,6 +64,11 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
 // #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
 //         AmbientOcclusionFactor aoFactor = GetScreenSpaceAmbientOcclusion(screen_uv);
 // #endif
+    
+    half ao = surfaceDataOcclusion;
+#if defined(_HBAO)
+    ao *= SampleHBAO(screen_uv);
+#endif
 
     InputData inputData = InputDataFromGbufferAndWorldPosition(gbuffer2, posWS.xyz);
 
@@ -66,11 +77,11 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
     BRDFData brdfData = BRDFDataFromGbuffer(gbuffer0, gbuffer1, gbuffer2);
 
     Light mainLight = GetToonDeferredMainLight(inputData.positionWS, screen_uv);
+    half3 mainLightColor = MainLightingToonBased(brdfData, mainLight, inputData);
+    mainLightColor *= LerpWhiteTo(ao, _HbaoDirectionalIntensity);
 
-    half4 color = 0;
-    color.rgb += MainLightingToonBased(brdfData, mainLight, inputData);
-
-    uint clusterID = GetIdFormClusterSpace(screen_uv);
+    half3 additionalLightColor = 0;
+    uint clusterID = GetIdFormClusterSpace(screen_uv, d);
     uint clusteredLightStart = GetClusteredLightStart(clusterID);
     int clusteredLightCount = GetClusteredLightCount(clusterID);
     UNITY_LOOP
@@ -78,13 +89,13 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
     {
         uint clusteredLightIndex = GetClusteredLightIndex(clusteredLightStart + index);
         Light additionalLight = GetAdditionalPerObjectLight(clusteredLightIndex, inputData.positionWS);
-        color.rgb += LightingToonBased(brdfData, additionalLight, inputData);
+        additionalLightColor += LightingToonBased(brdfData, additionalLight, inputData);
     }
 
-    color.a = surfaceDataOcclusion;
-#if defined(_HBAO)
-    color.a *= saturate(1 - SAMPLE_TEXTURE2D_X_LOD(_HBAoTexture, my_point_clamp_sampler, screen_uv, 0).r);
-#endif
+    half4 color = 0;
+    color.rgb += mainLightColor;
+    color.rgb += additionalLightColor;
+    color.a = ao;
 
     return color;
 }
@@ -174,6 +185,8 @@ half4 ClearStencilFragmentPass(Varyings input) : SV_Target
 #define _NumberX 10
 #define _NumberY 10
 
+float _ClusteredDebugIndexZ;
+
 half SampleNumber(uint id, float2 screenUV)
 {
     uint number = id + 1;
@@ -201,18 +214,20 @@ half4 DebugClusterLights(Varyings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+    
+    // return 0;
 
     float2 screenUV = GetScreenUV(input);
-
-    uint clusterID = GetIdFormClusterSpace(screenUV);
+    
+    uint clusterID = GetIdFormClusterSpace(screenUV, saturate(_ClusteredDebugIndexZ));
     uint clusteredLightCount = GetClusteredLightCount(clusterID);
-
+    
     half3 color = lerp(half3(0, 0, 1), half3(1, 0, 0), (float)clusteredLightCount / (float)_MaxClusterLightIndex);
-
+    
     half number = SampleNumber(clusteredLightCount, screenUV);
-
+    
     color = lerp(color, half3(1, 1, 1), number);
-
+    
     return half4(color, _DebugAlpha);
 }
 

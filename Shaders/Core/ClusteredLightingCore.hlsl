@@ -15,19 +15,26 @@ Buffer<int> _ClusterLightIndexBuffer;
 #endif
 
 float4 _ClusterCount;
+uint _MaxClusterCount;
 
 //从3维id转换成1维id
-uint GetIdFrom2D(uint2 id)
+uint GetIdFrom3D(uint3 id3D)
 {
-    return
-        id.x +
-        id.y * _ClusterCount.x;
+    uint id =
+        id3D.x +
+        id3D.y * _ClusterCount.x + 
+        id3D.z * _ClusterCount.y * _ClusterCount.z;
+    
+    return min(max(id, 0), _MaxClusterCount);
 }
 
-uint GetIdFormClusterSpace(float2 screenPos)
+uint GetIdFormClusterSpace(float2 screenPos, float z)
 {
-    uint2 id2d = screenPos * _ClusterCount.xy;
-    return GetIdFrom2D(id2d);
+    uint2 idXY = screenPos * _ClusterCount.xy;
+    uint idZ = (uint)z * _ClusterCount.z;
+    uint3 id3D = uint3(idXY, idZ);
+    
+    return GetIdFrom3D(id3D);
 }
 
 //获得裁剪后的灯光总数量
@@ -46,11 +53,11 @@ uint GetClusteredLightIndex(uint id)
     return _ClusterLightIndexBuffer[id];
 }
 
-half3 GetClusteredLightingBased(float2 screen_uv, BRDFData brdfData, InputData inputData)
+half3 GetClusteredLightingBased(float2 screen_uv, float z, BRDFData brdfData, InputData inputData)
 {
     half3 color = 0;
     
-    uint clusterID = GetIdFormClusterSpace(screen_uv);
+    uint clusterID = GetIdFormClusterSpace(screen_uv, z);
     uint clusteredLightStart = GetClusteredLightStart(clusterID);
     int clusteredLightCount = GetClusteredLightCount(clusterID);
     UNITY_LOOP
@@ -64,11 +71,11 @@ half3 GetClusteredLightingBased(float2 screen_uv, BRDFData brdfData, InputData i
     return color;
 }
 
-half3 GetClusteredLightingDistanceAttenuation(float2 screen_uv, float3 positionWS)
+half3 GetClusteredLightingDistanceAttenuation(float2 screen_uv, float z, float3 positionWS)
 {
     half3 color = 0;
     
-    uint clusterID = GetIdFormClusterSpace(screen_uv);
+    uint clusterID = GetIdFormClusterSpace(screen_uv, z);
     uint clusteredLightStart = GetClusteredLightStart(clusterID);
     int clusteredLightCount = GetClusteredLightCount(clusterID);
     UNITY_LOOP

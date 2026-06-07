@@ -15,20 +15,22 @@ namespace RoxamiRPCore
     {
         //Settings
         [SerializeField] private HBAoSettings hbaoSettings;
+        
         [SerializeField] private ActorForwardSettings actorForwardSettings;
-        [SerializeField] private PixelStyleSettings pixelSettings;
 
         //Passes
         private static readonly InitializedPass initializedPass = new InitializedPass(RenderPassEvent.BeforeRendering);
         
         private HBAoRenderPass hbaoRenderPass;
+        
         private readonly BlurRenderPass blurRenderPass = new BlurRenderPass();//use for hbao
         
         private ActorForwardRenderPass actorForwardRenderPass;
         
         private GlobalFogRenderPass globalFogRenderPass;
+
+        private ProximityColorModifierPass proximityColorModifierPass;
         
-        private PixelStyleRenderPass pixelStyleRenderPass;
         
         public override void Create()
         {
@@ -38,31 +40,45 @@ namespace RoxamiRPCore
             
             globalFogRenderPass = new GlobalFogRenderPass(RenderPassEvent.AfterRenderingSkybox);
             
-            pixelStyleRenderPass = new PixelStyleRenderPass(pixelSettings);
+            proximityColorModifierPass = new ProximityColorModifierPass(RenderPassEvent.AfterRenderingTransparents);
         }
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            renderer.EnqueuePass(initializedPass);
+            var isGameView = renderingData.cameraData.cameraType == CameraType.Game;
             
-            if (hbaoRenderPass != null && hbaoSettings.isActive)
+            var volume = VolumeManager.instance.stack;
+            
+            renderer.EnqueuePass(initializedPass);
+
+            //HBAO
+            var hbaoVolume = volume.GetComponent<HBAO>();
+            if (hbaoRenderPass != null && hbaoSettings.isActive && hbaoVolume != null && hbaoVolume.IsActive())
             {
+                hbaoRenderPass.UpdateVolume(hbaoVolume);
                 renderer.EnqueuePass(hbaoRenderPass);
             }
             
+            //DrawActor
             if (actorForwardRenderPass != null && actorForwardSettings.isActive)
             {
                 renderer.EnqueuePass(actorForwardRenderPass);
             }
             
-            if (globalFogRenderPass != null)
+            //Fog
+            var fogVolume = volume.GetComponent<RoxamiGlobalFog>();
+            if (isGameView && globalFogRenderPass != null && fogVolume != null && fogVolume.IsActive())
             {
+                globalFogRenderPass.UpdateVolume(fogVolume);
                 renderer.EnqueuePass(globalFogRenderPass);
             }
 
-            if (pixelStyleRenderPass != null && pixelSettings.isActive)
+            //ProximityColorModifier
+            var proximityColorModifieVolume = volume.GetComponent<ProximityColorModifier>();
+            if (isGameView && proximityColorModifierPass != null && proximityColorModifieVolume != null && proximityColorModifieVolume.IsActive())
             {
-                renderer.EnqueuePass(pixelStyleRenderPass);
+                proximityColorModifierPass.UpdateVolume(proximityColorModifieVolume);
+                renderer.EnqueuePass(proximityColorModifierPass);
             }
         }
 
@@ -71,7 +87,7 @@ namespace RoxamiRPCore
             hbaoRenderPass?.Dispose();
             actorForwardRenderPass?.Dispose();
             globalFogRenderPass?.Dispose();
-            pixelStyleRenderPass?.Dispose();
+            proximityColorModifierPass?.Dispose();
         }
 
         /// <summary>
@@ -90,10 +106,11 @@ namespace RoxamiRPCore
             
             public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
             {
-                cmd = CommandBufferPool.Get(bufferName);
+                cmd = CommandBufferPool.Get();
                 using (new ProfilingScope(cmd, profilingSampler))
                 {
-                    cmd.DisableShaderKeyword(RoxamiShaderConst.hbaoKeyword);
+                    GlobalFogRenderPass.DisableKeyword(cmd);
+                    HBAoRenderPass.DisableKeyword(cmd);
                 }
                 context.ExecuteCommandBuffer(cmd);
                 cmd.Clear();

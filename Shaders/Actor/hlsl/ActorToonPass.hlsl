@@ -276,13 +276,19 @@ half4 ActorToon2DForwardFragment(Varyings input) : SV_Target
     //half NdotL = saturate(dot(mainLight.direction, inputData.normalWS));
     //half3 spec = _RoxamiF0 * DirectBRDFSpecular(brdfData, inputData.normalWS, mainLight.direction, inputData.viewDirectionWS);
     
-    half3 additionalLightColor = GetClusteredLightingDistanceAttenuation(inputData.normalizedScreenSpaceUV, inputData.positionWS) * surfaceData.albedo.rgb;
+    half3 additionalLightColor = 
+        GetClusteredLightingDistanceAttenuation(
+            inputData.normalizedScreenSpaceUV, 
+            input.positionCS.z / input.positionCS.w,
+            inputData.positionWS
+            );
     
-    half3 color = 0;
-    color += max(mainLight.color, 0.35f) * surfaceData.albedo.rgb;
-    color += min(2.0f, additionalLightColor) * surfaceData.albedo.rgb;
+    half4 color = 0;
+    color.rgb += max(mainLight.color, 0.35f) * surfaceData.albedo.rgb;
+    color.rgb += additionalLightColor * surfaceData.albedo.rgb;
+    color.a = surfaceData.alpha;
     
-    return half4(color, 1);
+    return color;
 }
 
 #endif

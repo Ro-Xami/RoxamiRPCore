@@ -11,6 +11,7 @@ namespace RoxamiRPCore
         private static RoxamiClusteredLightingFeature m_Instance;
         
         [SerializeField] ClusteredLightingSettings settings = new ClusteredLightingSettings();
+        
         private ClusteredLightingPass clusteredLightingPass;
 
         public override RoxamiDeferredLights CreateDeferredRenderPass()

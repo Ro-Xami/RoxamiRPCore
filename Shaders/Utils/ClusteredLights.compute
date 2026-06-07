@@ -4,53 +4,199 @@
 #include "Packages/roxamirpcore/Shaders/Core/ToonLighting.hlsl"
 #include "Packages/roxamirpcore/Shaders/Core/ClusteredLightingCore.hlsl"
 
-float4 _CameraRightDir;//xyz:CameraRightDir, w:CameraAspect
-
-bool IntersectEllipseAABB(
-    float2 center,
-    float2 radius,   // (rx, ry)
-    float2 boxMin,
-    float2 boxMax)
+struct ClusteredBox
 {
-    float2 closest = clamp(center, boxMin, boxMax);
-    float2 d = (closest - center) / radius;
-    return dot(d, d) <= 1.0;
+    // outward planes
+    // inside test:
+    // dot(plane.xyz, p) + plane.w <= 0
+
+    float4 left;
+    float4 right;
+
+    float4 bottom;
+    float4 top;
+
+    float4 nearPlane;
+    float4 farPlane;
+};
+
+//    7 -------- 6
+//   /|         /|
+//  / |        / |
+// 3 -------- 2  |
+// |  |       |  |
+// |  4 ------|--5
+// | /        | /
+// |/         |/
+// 0 -------- 1
+
+#define _CameraViewportPointCount 8
+
+float4 _CameraViewportPointsWS[_CameraViewportPointCount];
+
+float3 FrustumLerp(float u, float v, float w)
+{
+    float3 n0 = lerp(
+        _CameraViewportPointsWS[0].xyz,
+        _CameraViewportPointsWS[1].xyz,
+        u);
+
+    float3 n1 = lerp(
+        _CameraViewportPointsWS[3].xyz,
+        _CameraViewportPointsWS[2].xyz,
+        u);
+
+    float3 f0 = lerp(
+        _CameraViewportPointsWS[4].xyz,
+        _CameraViewportPointsWS[5].xyz,
+        u);
+
+    float3 f1 = lerp(
+        _CameraViewportPointsWS[7].xyz,
+        _CameraViewportPointsWS[6].xyz,
+        u);
+
+    float3 nearPos = lerp(n0, n1, v);
+    float3 farPos  = lerp(f0, f1, v);
+
+    return lerp(nearPos, farPos, w);
 }
 
-bool IsLightAffectCluster(int lightIndex, float4 box)
+// plane equation:
+// dot(n, p) + d = 0
+float4 MakePlane(float3 a, float3 b, float3 c)
 {
-    float3 lightPosWS = _AdditionalLightsPosition[lightIndex].xyz;
+    float3 n = normalize(cross(b - a, c - a));
 
-    float4 lightCS = TransformWorldToHClip(lightPosWS);
-    // if (lightCS.w <= 0)
-    //     return false; // 在摄像机后面
+    return float4(
+        n,
+        -dot(n, a)
+    );
+}
 
-    float4 lightScr = ComputeScreenPos(lightCS);
-    float2 lightSS = lightScr.xy / lightScr.w;
+ClusteredBox GetClusteredBoxFrom3Did(uint3 id)
+{
+    ClusteredBox output;
 
-    float lightRadiusWS = sqrt(1 / _AdditionalLightsAttenuation[lightIndex].x);
-    float3 lightOffsetWS = lightPosWS + lightRadiusWS * _CameraRightDir.xyz;
-    float4 lightOffsetCS = TransformWorldToHClip(lightOffsetWS);
-    float4 lightOffsetScr = ComputeScreenPos(lightOffsetCS);
-    float2 lightOffsetSS = lightOffsetScr.xy / lightOffsetScr.w;
+    float3 clusterCount = _ClusterCount.xyz;
 
-    float lightRadiusSSX = length(lightOffsetSS - lightSS);
-    float lightRadiusSSY = lightRadiusSSX * _CameraRightDir.w;
+    //----------------------------------
+    // normalized cluster range
+    //----------------------------------
 
-    return IntersectEllipseAABB(lightSS.xy, float2(lightRadiusSSX, lightRadiusSSY), box.xy, box.zw);
+    float x0 = id.x / clusterCount.x;
+    float x1 = (id.x + 1) / clusterCount.x;
+
+    float y0 = id.y / clusterCount.y;
+    float y1 = (id.y + 1) / clusterCount.y;
+
+    float z0 = id.z / clusterCount.z;
+    float z1 = (id.z + 1) / clusterCount.z;
+
+    //----------------------------------
+    // cluster corners
+    //----------------------------------
+
+    float3 p0 = FrustumLerp(x0, y0, z0);
+    float3 p1 = FrustumLerp(x1, y0, z0);
+    float3 p2 = FrustumLerp(x1, y1, z0);
+    float3 p3 = FrustumLerp(x0, y1, z0);
+
+    float3 p4 = FrustumLerp(x0, y0, z1);
+    float3 p5 = FrustumLerp(x1, y0, z1);
+    float3 p6 = FrustumLerp(x1, y1, z1);
+    float3 p7 = FrustumLerp(x0, y1, z1);
+
+    //----------------------------------
+    // planes
+    //
+    // all normals point OUTSIDE
+    //
+    // inside:
+    // dot(plane.xyz, p) + plane.w <= 0
+    //----------------------------------
+
+    // Left (-X)
+    output.left = MakePlane(
+        p0,
+        p7,
+        p3
+    );
+
+    // Right (+X)
+    output.right = MakePlane(
+        p1,
+        p2,
+        p6
+    );
+
+    // Bottom (-Y)
+    output.bottom = MakePlane(
+        p0,
+        p1,
+        p5
+    );
+
+    // Top (+Y)
+    output.top = MakePlane(
+        p3,
+        p7,
+        p6
+    );
+
+    // Near (toward camera)
+    output.nearPlane = MakePlane(
+        p0,
+        p3,
+        p2
+    );
+
+    // Far (away from camera)
+    output.farPlane = MakePlane(
+        p4,
+        p5,
+        p6
+    );
+
+    return output;
+}
+
+bool IsLightAffectCluster(int lightIndex, ClusteredBox box)
+{
+    float3 lightPosWS =
+        _AdditionalLightsPosition[lightIndex].xyz;
+
+    float lightRadiusWS =
+        sqrt(1.0 / _AdditionalLightsAttenuation[lightIndex].x);
+
+    if (dot(box.left.xyz, lightPosWS) + box.left.w > lightRadiusWS)
+        return false;
+
+    if (dot(box.right.xyz, lightPosWS) + box.right.w > lightRadiusWS)
+        return false;
+
+    if (dot(box.bottom.xyz, lightPosWS) + box.bottom.w > lightRadiusWS)
+        return false;
+
+    if (dot(box.top.xyz, lightPosWS) + box.top.w > lightRadiusWS)
+        return false;
+
+    if (dot(box.nearPlane.xyz, lightPosWS) + box.nearPlane.w > lightRadiusWS)
+        return false;
+
+    if (dot(box.farPlane.xyz, lightPosWS) + box.farPlane.w > lightRadiusWS)
+        return false;
+
+    return true;
 }
 
 [numthreads(8,8,1)]
 void ClusteredLights (uint3 id : SV_DispatchThreadID)
 {
-    uint clusterIndex = GetIdFrom2D(id.xy);
+    uint clusterIndex = GetIdFrom3D(id.xyz);
     _ClusterLightCountBuffer[clusterIndex] = 0;
 
-    float minX = id.x / _ClusterCount.x;
-    float maxX = (id.x + 1) / _ClusterCount.x;
-    float minY = id.y / _ClusterCount.y;
-    float maxY = (id.y + 1) / _ClusterCount.y;
-    float4 box = float4(minX, minY, maxX, maxY);
+    ClusteredBox box = GetClusteredBoxFrom3Did(id.xyz);
 
     uint m_LightCount = 0;
     uint m_LightStart = clusterIndex * _MaxClusterLightIndex;
