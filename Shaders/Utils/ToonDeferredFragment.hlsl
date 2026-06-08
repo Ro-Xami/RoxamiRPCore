@@ -88,7 +88,10 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
     for (int index = 0; index < clusteredLightCount; index++)
     {
         uint clusteredLightIndex = GetClusteredLightIndex(clusteredLightStart + index);
-        Light additionalLight = GetAdditionalPerObjectLight(clusteredLightIndex, inputData.positionWS);
+        int lightIndex = clusteredLightIndex;//GetPerObjectLightIndex(clusteredLightIndex);
+        Light additionalLight = GetAdditionalPerObjectLight(lightIndex, inputData.positionWS);
+        additionalLight.shadowAttenuation = AdditionalLightShadow(lightIndex, inputData.positionWS, additionalLight.direction, 0, 0);
+        
         additionalLightColor += LightingToonBased(brdfData, additionalLight, inputData);
     }
 

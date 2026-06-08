@@ -127,7 +127,7 @@ Shader "RoxamiRP/Scene/ToonLit2D"
             ZWrite On
             ZTest LEqual
             ColorMask 0
-            Cull[_Cull]
+            Cull Off
 
             HLSLPROGRAM
             #pragma target 2.0
