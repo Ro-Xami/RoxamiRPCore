@@ -2,7 +2,9 @@
 #define ROXAMI_CLUSTERED_LIGHTING_CORE_INCLUDE
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-#include "Packages/roxamirpcore/Shaders/Core/ToonLighting.hlsl"
+
+int _RoxamiAdditionalLightCount;
+#define GetRoxamiAdditionalLightsCount() _RoxamiAdditionalLightCount
 
 uint _MaxClusterLightIndex;
 
@@ -65,7 +67,7 @@ half3 GetClusteredLightingBased(float2 screen_uv, float z, BRDFData brdfData, In
     {
         uint clusteredLightIndex = GetClusteredLightIndex(clusteredLightStart + index);
         Light additionalLight = GetAdditionalPerObjectLight(clusteredLightIndex, inputData.positionWS);
-        color.rgb += LightingToonBased(brdfData, additionalLight, inputData);
+        // color.rgb += LightingToonBased(brdfData, additionalLight, inputData);
     }
     
     return color;

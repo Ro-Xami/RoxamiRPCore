@@ -1,10 +1,7 @@
 ﻿#ifndef _TOON_DEFERRED_FRAGMENT
 #define _TOON_DEFERRED_FRAGMENT
-
-#include_with_pragmas "Packages/com.unity.render-pipelines.universal/Shaders/Utils/StencilDeferred.hlsl"
 #include "Packages/roxamirpcore/Shaders/Core/Common.hlsl"
 #include "Packages/roxamirpcore/Shaders/Core/ToonLighting.hlsl"
-#include "Packages/roxamirpcore/Shaders/Core/ClusteredLightingCore.hlsl"
 
 float2 GetScreenUV(Varyings input)
 {
@@ -21,37 +18,52 @@ float2 GetScreenUV(Varyings input)
     return screen_uv;
 }
 
-TEXTURE2D_X_HALF(_HBAoTexture);
-half _HbaoDirectionalIntensity;
-
-float SampleHBAO(float2 screenUV)
-{
-    return saturate(1 - SAMPLE_TEXTURE2D_X_LOD(_HBAoTexture, my_point_clamp_sampler, screenUV, 0).r);
-}
-
 half4 ToonDeferredShading(Varyings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-    float2 screen_uv = GetScreenUV(input);
+    float2 screen_uv = (input.screenUV.xy / input.screenUV.z);
 
+    #if defined(SUPPORTS_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
+    float2 undistorted_screen_uv = screen_uv;
+    UNITY_BRANCH if (_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
+    {
+        screen_uv = input.positionCS.xy * _ScreenSize.zw;
+    }
+    #endif
+
+    half4 shadowMask = 1.0;
+
+    #if _RENDER_PASS_ENABLED
+    float d        = LOAD_FRAMEBUFFER_INPUT(GBUFFER3, input.positionCS.xy).x;
+    half4 gbuffer0 = LOAD_FRAMEBUFFER_INPUT(GBUFFER0, input.positionCS.xy);
+    half4 gbuffer1 = LOAD_FRAMEBUFFER_INPUT(GBUFFER1, input.positionCS.xy);
+    half4 gbuffer2 = LOAD_FRAMEBUFFER_INPUT(GBUFFER2, input.positionCS.xy);
+    #if defined(_DEFERRED_MIXED_LIGHTING)
+    shadowMask = LOAD_FRAMEBUFFER_INPUT(GBUFFER4, input.positionCS.xy);
+    #endif
+    #else
     // Using SAMPLE_TEXTURE2D is faster than using LOAD_TEXTURE2D on iOS platforms (5% faster shader).
     // Possible reason: HLSLcc upcasts Load() operation to float, which doesn't happen for Sample()?
     float d        = SAMPLE_TEXTURE2D_X_LOD(_CameraDepthTexture, my_point_clamp_sampler, screen_uv, 0).x; // raw depth value has UNITY_REVERSED_Z applied on most platforms.
     half4 gbuffer0 = SAMPLE_TEXTURE2D_X_LOD(_GBuffer0, my_point_clamp_sampler, screen_uv, 0);
     half4 gbuffer1 = SAMPLE_TEXTURE2D_X_LOD(_GBuffer1, my_point_clamp_sampler, screen_uv, 0);
     half4 gbuffer2 = SAMPLE_TEXTURE2D_X_LOD(_GBuffer2, my_point_clamp_sampler, screen_uv, 0);
+    #if defined(_DEFERRED_MIXED_LIGHTING)
+    shadowMask = SAMPLE_TEXTURE2D_X_LOD(MERGE_NAME(_, GBUFFER_SHADOWMASK), my_point_clamp_sampler, screen_uv, 0);
+    #endif
+    #endif
 
     half surfaceDataOcclusion = gbuffer1.a;
     uint materialFlags = UnpackMaterialFlags(gbuffer0.a);
-
-#if defined(SUPPORTS_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
+    
+    #if defined(SUPPORTS_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
     UNITY_BRANCH if (_FOVEATED_RENDERING_NON_UNIFORM_RASTER)
     {
         input.positionCS.xy = undistorted_screen_uv * _ScreenSize.xy;
     }
-#endif
+    #endif
 
     #if defined(USING_STEREO_MATRICES)
     int eyeIndex = unity_StereoEyeIndex;
@@ -61,51 +73,59 @@ half4 ToonDeferredShading(Varyings input) : SV_Target
     float4 posWS = mul(_ScreenToWorld[eyeIndex], float4(input.positionCS.xy, d, 1.0));
     posWS.xyz *= rcp(posWS.w);
 
-// #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
-//         AmbientOcclusionFactor aoFactor = GetScreenSpaceAmbientOcclusion(screen_uv);
-// #endif
+    #ifdef _LIGHT_LAYERS
+    float4 renderingLayers = SAMPLE_TEXTURE2D_X_LOD(MERGE_NAME(_, GBUFFER_LIGHT_LAYERS), my_point_clamp_sampler, screen_uv, 0);
+    uint meshRenderingLayers = DecodeMeshRenderingLayer(renderingLayers.r);
+    #else
+    uint meshRenderingLayers = 0;
+    #endif
+
+    half3 color = half3(0.0, 0.0, 0.0);
+    half alpha = 1.0;
+
+    RoxamiHBAO aoFactor = GetRoxamiHBAO(screen_uv);
+    alpha = aoFactor.inDirectionalIntensity;
     
-    half ao = surfaceDataOcclusion;
-#if defined(_HBAO)
-    ao *= SampleHBAO(screen_uv);
-#endif
-
+    AmbientOcclusionFactor aoFactorT = GetScreenSpaceAmbientOcclusion(screen_uv);
+    
     InputData inputData = InputDataFromGbufferAndWorldPosition(gbuffer2, posWS.xyz);
+    inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);   // required by Clustered Light Iterator
+    
+    FragmentOutput gbufferData;
+    gbufferData.GBuffer0 = gbuffer0;
+    gbufferData.GBuffer1 = gbuffer1;
+    gbufferData.GBuffer2 = gbuffer2;
+    gbufferData.GBuffer3 = half4(0.0, 0.0, 0.0, 0.0);   // not used by following code
+    
+    BRDFData brdfData = BRDFDataFromGbuffer(gbufferData.GBuffer0, gbufferData.GBuffer1, gbufferData.GBuffer2);
+    
+    // Main Light
+    color = ToonDeferredMainLightShading(inputData, brdfData, shadowMask, aoFactor, meshRenderingLayers, materialFlags);
 
-    bool materialSpecularHighlightsOff = (materialFlags & kMaterialFlagSpecularHighlightsOff);
-
-    BRDFData brdfData = BRDFDataFromGbuffer(gbuffer0, gbuffer1, gbuffer2);
-
-    Light mainLight = GetToonDeferredMainLight(inputData.positionWS, screen_uv);
-    half3 mainLightColor = MainLightingToonBased(brdfData, mainLight, inputData);
-    mainLightColor *= LerpWhiteTo(ao, _HbaoDirectionalIntensity);
-
-    half3 additionalLightColor = 0;
-    uint clusterID = GetIdFormClusterSpace(screen_uv, d);
-    uint clusteredLightStart = GetClusteredLightStart(clusterID);
-    int clusteredLightCount = GetClusteredLightCount(clusterID);
-    UNITY_LOOP
-    for (int index = 0; index < clusteredLightCount; index++)
+    // Additional Directional Lights
+    #if USE_CLUSTERED_LIGHTING
+    for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
     {
-        uint clusteredLightIndex = GetClusteredLightIndex(clusteredLightStart + index);
-        int lightIndex = clusteredLightIndex;//GetPerObjectLightIndex(clusteredLightIndex);
-        Light additionalLight = GetAdditionalPerObjectLight(lightIndex, inputData.positionWS);
-        additionalLight.shadowAttenuation = AdditionalLightShadow(lightIndex, inputData.positionWS, additionalLight.direction, 0, 0);
-        
-        additionalLightColor += LightingToonBased(brdfData, additionalLight, inputData);
+        color += ToonDeferredAdditionalLightShading(lightIndex, inputData, brdfData, shadowMask, aoFactor, meshRenderingLayers, materialFlags);
     }
+    #endif
 
-    half4 color = 0;
-    color.rgb += mainLightColor;
-    color.rgb += additionalLightColor;
-    color.a = ao;
+    uint pixelLightCount = GetAdditionalLightsCount();
+    LIGHT_LOOP_BEGIN(pixelLightCount)
+        color += ToonDeferredAdditionalLightShading(lightIndex, inputData, brdfData, shadowMask, aoFactor, meshRenderingLayers, materialFlags);
+    LIGHT_LOOP_END
 
-    return color;
+    return half4(color, alpha);
 }
 
 //===========================================================================//
 //=========================ConvolutionOutline================================//
 //===========================================================================//
+/*
+half4 _ConvolutionOutline_Color;
+float _ConvolutionOutline_OutlineWidth;
+float _ConvolutionOutline_DepthThreshold;
+float _ConvolutionOutline_OutlineIntensity;
 
 // Sobel卷积核
 static const float sobelX[9] = {
@@ -172,6 +192,7 @@ half4 ConvolutionOutlineFragment(Varyings input) : SV_Target
     
     return half4(outlineColor, 1);
 }
+*/
 
 //===========================================================================//
 //===============================ClearStencil================================//
@@ -184,54 +205,56 @@ half4 ClearStencilFragmentPass(Varyings input) : SV_Target
 //===========================================================================//
 //=========================DebugClusterLights================================//
 //===========================================================================//
-#define _Number 100
-#define _NumberX 10
-#define _NumberY 10
-
-float _ClusteredDebugIndexZ;
-
-half SampleNumber(uint id, float2 screenUV)
-{
-    uint number = id + 1;
-
-    uint tileX = (number - 1) % _NumberX;
-    uint tileY = (number - 1) / _NumberX;
-
-    float2 tileSize = float2(1.0 / _NumberX, 1.0 / _NumberY);
-
-    float2 tileMinUV;
-    tileMinUV.x = tileX * tileSize.x;
-    tileMinUV.y = 1.0 - (tileY + 1) * tileSize.y; // 如果你的图是左上为1
-
-    float2 localUV = frac(screenUV * _ClusterCount.xy);
-    float2 sampleUV = tileMinUV + localUV * tileSize;
-
-    return SAMPLE_TEXTURE2D(
-        _DebugNumberMap,
-        sampler_DebugNumberMap,
-        sampleUV
-    ).r;
-}
+// #define _Number 100
+// #define _NumberX 10
+// #define _NumberY 10
+//
+// float _ClusteredDebugIndexZ;
+//
+// half SampleNumber(uint id, float2 screenUV)
+// {
+//     uint number = id + 1;
+//
+//     uint tileX = (number - 1) % _NumberX;
+//     uint tileY = (number - 1) / _NumberX;
+//
+//     float2 tileSize = float2(1.0 / _NumberX, 1.0 / _NumberY);
+//
+//     float2 tileMinUV;
+//     tileMinUV.x = tileX * tileSize.x;
+//     tileMinUV.y = 1.0 - (tileY + 1) * tileSize.y; // 如果你的图是左上为1
+//
+//     float2 localUV = frac(screenUV * _ClusterCount.xy);
+//     float2 sampleUV = tileMinUV + localUV * tileSize;
+//
+//     return SAMPLE_TEXTURE2D(
+//         _DebugNumberMap,
+//         sampler_DebugNumberMap,
+//         sampleUV
+//     ).r;
+// }
 
 half4 DebugClusterLights(Varyings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
     
-    // return 0;
+    return 0;
 
-    float2 screenUV = GetScreenUV(input);
-    
-    uint clusterID = GetIdFormClusterSpace(screenUV, saturate(_ClusteredDebugIndexZ));
-    uint clusteredLightCount = GetClusteredLightCount(clusterID);
-    
-    half3 color = lerp(half3(0, 0, 1), half3(1, 0, 0), (float)clusteredLightCount / (float)_MaxClusterLightIndex);
-    
-    half number = SampleNumber(clusteredLightCount, screenUV);
-    
-    color = lerp(color, half3(1, 1, 1), number);
-    
-    return half4(color, _DebugAlpha);
+    // float2 screenUV = GetScreenUV(input);
+    // uint lightCount = 0;
+    //
+    // #if USE_CLUSTERED_LIGHTING
+    // lightCount = min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS);
+    // #endif
+    //
+    // half3 color = lerp(half3(0, 0, 1), half3(1, 0, 0), (float)lightCount / (float)MAX_VISIBLE_LIGHTS);
+    //
+    // half number = SampleNumber(lightCount, screenUV);
+    //
+    // color = lerp(color, half3(1, 1, 1), number);
+    //
+    // return half4(color, _DebugAlpha);
 }
 
 //===========================================================================//
@@ -268,10 +291,6 @@ half4 RenderingDebug(Varyings input) : SV_Target
     #endif
     float4 posWS = mul(_ScreenToWorld[eyeIndex], float4(input.positionCS.xy, d, 1.0));
     posWS.xyz *= rcp(posWS.w);
-
-// #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
-//         AmbientOcclusionFactor aoFactor = GetScreenSpaceAmbientOcclusion(screen_uv);
-// #endif
 
     InputData inputData = InputDataFromGbufferAndWorldPosition(gbuffer2, posWS.xyz);
 

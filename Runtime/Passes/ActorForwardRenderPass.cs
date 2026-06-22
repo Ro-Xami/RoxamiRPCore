@@ -37,11 +37,11 @@ namespace RoxamiRPCore
             cmd = CommandBufferPool.Get(bufferName);
             using (new ProfilingScope(cmd, profilingSampler))
             {
-                cmd.SetGlobalVector(actorRimParamsID, new Vector4(settings.rimOffset, settings.rimThreshold));
+                // cmd.SetGlobalVector(actorRimParamsID, new Vector4(settings.rimOffset, settings.rimThreshold));
                 
                 var sortingSettings = new SortingSettings(renderingData.cameraData.camera)
                 {
-                    criteria = SortingCriteria.CommonOpaque,
+                    criteria = SortingCriteria.CommonTransparent,
                 };
                 
                 var drawingSettings = new DrawingSettings(actorForwardShaderTagId, sortingSettings)

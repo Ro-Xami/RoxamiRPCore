@@ -53,7 +53,7 @@ namespace RoxamiRPCore
 
             //HBAO
             var hbaoVolume = volume.GetComponent<HBAO>();
-            if (hbaoRenderPass != null && hbaoSettings.isActive && hbaoVolume != null && hbaoVolume.IsActive())
+            if (hbaoRenderPass != null && hbaoVolume != null && hbaoVolume.IsActive())
             {
                 hbaoRenderPass.UpdateVolume(hbaoVolume);
                 renderer.EnqueuePass(hbaoRenderPass);

@@ -2,40 +2,13 @@
 #define TOON_LIGHTING_INCLUDE
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-//#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/SurfaceInput.hlsl"
-//#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/UnityGBuffer.hlsl"
-
-int _RoxamiAdditionalLightsCount;
-#define GetRoxamiAdditionalLightsCount() _RoxamiAdditionalLightsCount
+#include "Packages/roxamirpcore/Shaders/Core/HBAO.hlsl"
+#include "Packages/com.unity.render-pipelines.universal/Shaders/Utils/DeferredPlusShading.hlsl"
 
 TEXTURE2D(_ToonLutMap);
 SAMPLER(sampler_ToonLutMap);
 
-Light GetToonDeferredMainLight(float3 posWS, float2 screenUV)
-{
-    Light mainLight = GetMainLight();
-    mainLight.distanceAttenuation = 1.0;
-
-    half4 shadowMask = half4(0,0,0,0);//不考虑烘焙
-
-#if defined(_MAIN_LIGHT_SHADOWS_SCREEN) && !defined(_SURFACE_TYPE_TRANSPARENT)
-    float4 shadowCoord = float4(screenUV, 0.0, 1.0);
-#elif defined(MAIN_LIGHT_CALCULATE_SHADOWS)
-    float4 shadowCoord = TransformWorldToShadowCoord(posWS.xyz);
-#else
-    float4 shadowCoord = float4(0, 0, 0, 0);
-#endif
-    mainLight.shadowAttenuation = MainLightShadow(shadowCoord, posWS.xyz, shadowMask, _MainLightOcclusionProbes);
-
-#if defined(_LIGHT_COOKIES)
-    real3 cookieColor = SampleMainLightCookie(posWS);
-    mainLight.color *= half3(cookieColor);
-#endif
-
-    return mainLight;
-}
-
-half3 MainLightingToonBased(BRDFData brdfData, Light light, InputData inputData)
+half3 ToonMainLightingBased(BRDFData brdfData, Light light, InputData inputData, bool specularHighlightsOff)
 {
     half NdotL = saturate(dot(inputData.normalWS, light.direction));
     NdotL *= light.shadowAttenuation * light.distanceAttenuation;
@@ -43,9 +16,121 @@ half3 MainLightingToonBased(BRDFData brdfData, Light light, InputData inputData)
     half3 radiance = light.color * toonNdotL;
 
     half3 brdf = brdfData.diffuse;
-    brdf += brdfData.specular * DirectBRDFSpecular(brdfData, inputData.normalWS, light.direction, inputData.viewDirectionWS);
+    
+    #ifndef _SPECULARHIGHLIGHTS_OFF
+    [branch] if (!specularHighlightsOff)
+    {
+        brdf += brdfData.specular * DirectBRDFSpecular(brdfData, inputData.normalWS, light.direction, inputData.viewDirectionWS);
+    }
+    #endif // _SPECULARHIGHLIGHTS_OFF
 
     return brdf * radiance;
+}
+
+half3 ToonAdditionalLightingBased(BRDFData brdfData, Light light, InputData inputData, bool specularHighlightsOff)
+{
+    half NdotL = saturate(dot(inputData.normalWS, light.direction));
+    NdotL *= light.shadowAttenuation * light.distanceAttenuation;
+    half3 radiance = light.color * NdotL;
+
+    half3 brdf = brdfData.diffuse;
+    
+    #ifndef _SPECULARHIGHLIGHTS_OFF
+    [branch] if (!specularHighlightsOff)
+    {
+        brdf += brdfData.specular * DirectBRDFSpecular(brdfData, inputData.normalWS, light.direction, inputData.viewDirectionWS);
+    }
+    #endif // _SPECULARHIGHLIGHTS_OFF
+
+    return brdf * radiance;
+}
+
+Light ToonGetAdditionalLight(uint i, InputData inputData, half4 shadowMask, RoxamiHBAO aoFactor)
+{
+    Light light = GetAdditionalLight(i, inputData.positionWS, shadowMask);
+
+    light.color *= aoFactor.dirctionalIntensity;
+
+    return light;
+}
+
+half3 ToonDeferredShadingCommon(Light unityLight, InputData inputData, BRDFData brdfData, uint materialFlags)
+{
+    half3 color = half3(0.0f, 0.0f, 0.0f);
+
+    #if SHADER_API_MOBILE || SHADER_API_SWITCH
+    // Specular highlights are still silenced by setting specular to 0.0 during gbuffer pass and GPU timing is still reduced.
+    bool materialSpecularHighlightsOff = false;
+    #else
+    bool materialSpecularHighlightsOff = (materialFlags & kMaterialFlagSpecularHighlightsOff);
+    #endif
+
+    color = half3(ToonMainLightingBased(brdfData, unityLight, inputData, materialSpecularHighlightsOff));
+    
+    return color;
+}
+
+half3 ToonDeferredAdditionalLightShadingCommon(Light unityLight, InputData inputData, BRDFData brdfData, uint materialFlags)
+{
+    half3 color = half3(0.0f, 0.0f, 0.0f);
+
+    #if SHADER_API_MOBILE || SHADER_API_SWITCH
+    // Specular highlights are still silenced by setting specular to 0.0 during gbuffer pass and GPU timing is still reduced.
+    bool materialSpecularHighlightsOff = false;
+    #else
+    bool materialSpecularHighlightsOff = (materialFlags & kMaterialFlagSpecularHighlightsOff);
+    #endif
+
+    color = half3(ToonAdditionalLightingBased(brdfData, unityLight, inputData, materialSpecularHighlightsOff));
+    
+    return color;
+}
+
+half3 ToonDeferredMainLightShading(InputData inputData, BRDFData brdfData, half4 shadowMask, RoxamiHBAO aoFactor, uint meshRenderingLayers, uint materialFlags)
+{
+    Light unityLight = GetDeferredMainLight(inputData.positionWS, shadowMask, materialFlags);
+    
+    // color.w == 0 for MainLight means Subtractive Light (distanceAttenuation)
+    // Why MainLightColor.w and AdditionalLightColor.w acts differently?
+    #if defined(_DEFERRED_MIXED_LIGHTING)
+    // If both lights and geometry are static, then no realtime lighting to perform for this combination.
+    [branch] if (_MainLightColor.w == 0 && (materialFlags & kMaterialFlagSubtractiveMixedLighting) != 0)
+        return half3(0.0, 0.0, 0.0);
+    #endif
+
+    #ifdef _LIGHT_LAYERS
+    [branch] if (!IsMatchingLightLayer(unityLight.layerMask, meshRenderingLayers))
+        return half3(0.0, 0.0, 0.0);
+    #endif
+
+    unityLight.color *= aoFactor.dirctionalIntensity;
+
+    return ToonDeferredShadingCommon(unityLight, inputData, brdfData, materialFlags);
+}
+
+half3 ToonDeferredAdditionalLightShading(uint lightIndex, InputData inputData, BRDFData brdfData, half4 shadowMask, RoxamiHBAO aoFactor, uint meshRenderingLayers, uint materialFlags)
+{
+    Light unityLight = ToonGetAdditionalLight(lightIndex, inputData, shadowMask, aoFactor);
+    bool materialReceiveShadowsOff = (materialFlags & kMaterialFlagReceiveShadowsOff) != 0;
+    if (materialReceiveShadowsOff)
+    {
+        unityLight.shadowAttenuation = 1.0;
+    }
+
+    // color.w == 1 for AdditionalLight means Subtractive Light
+    // Why MainLightColor.w and AdditionalLightColor.w acts differently?
+    #if defined(_DEFERRED_MIXED_LIGHTING)
+    // If both lights and geometry are static, then no realtime lighting to perform for this combination.
+    [branch] if (_AdditionalLightsColor[lightIndex].w > 0 && (materialFlags & kMaterialFlagSubtractiveMixedLighting) != 0)
+        return half3(0.0, 0.0, 0.0);
+    #endif
+
+    #ifdef _LIGHT_LAYERS
+    [branch] if (!IsMatchingLightLayer(unityLight.layerMask, meshRenderingLayers))
+        return half3(0.0, 0.0, 0.0);
+    #endif
+
+    return ToonDeferredAdditionalLightShadingCommon(unityLight, inputData, brdfData, materialFlags);
 }
 
 half3 LightingToonBased(BRDFData brdfData, Light light, InputData inputData)

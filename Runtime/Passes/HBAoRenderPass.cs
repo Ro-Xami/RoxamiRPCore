@@ -6,27 +6,9 @@ using UnityEngine.Rendering.Universal;
 namespace RoxamiRPCore
 {
     [Serializable]
-    public class HBAoSettings : RoxamiCoreFeatureSettingsBase
+    public class HBAoSettings
     {
         public ComputeShader computeShader;
-            
-        [Range(0,4)]
-        public int downsample = 0;
-        
-        // [Min(0.0f)] 
-        // public float intensity = 1.0f;
-        //
-        // [Range(0.0f, 1.0f)] 
-        // public float radius = 0.5f;
-        //
-        // [Min(0.0f)] 
-        // public float maxStepSize = 10.0f;
-        //
-        // [Range(0.0f, 1.0f)] 
-        // public float angleBias = 0.1f;
-        
-        [SerializeField] 
-        public BlurSettings blurSettings = new BlurSettings();
     }
     
     public class HBAoRenderPass : ScriptableRenderPass
@@ -36,15 +18,14 @@ namespace RoxamiRPCore
             this.renderPassEvent = renderPassEvent;
             this.m_HbaoSettings = settings;
             this.m_BlurRenderPass = blurRenderPass;
+
+            if (m_HbaoSettings == null) return;
             
             cs = m_HbaoSettings.computeShader;
 
             if (!cs) return;
             kernel = cs.FindKernel(kernelName);
             
-            m_BlurSettings = m_HbaoSettings.blurSettings;
-            if (m_BlurSettings == null) return;
-
             profilingSampler = new ProfilingSampler(bufferName);
         }
 
@@ -59,7 +40,7 @@ namespace RoxamiRPCore
         private static readonly int texelSizeID = Shader.PropertyToID("_texelSize");
         private static readonly int hbaoParamsID = Shader.PropertyToID("_hbaoParams");
         private static readonly int hbaoStepSizeID = Shader.PropertyToID("_stepSize");
-        private static readonly int hbaoDirectionalIntensityID = Shader.PropertyToID("_HbaoDirectionalIntensity");
+        private static readonly int hbaoGlobalParamsID = Shader.PropertyToID("_HbaoGlobalParams");
 
         private RenderTextureDescriptor hbaoDescriptor;
 
@@ -68,7 +49,6 @@ namespace RoxamiRPCore
         private readonly HBAoSettings m_HbaoSettings;
         
         private readonly BlurRenderPass m_BlurRenderPass;
-        private readonly BlurSettings m_BlurSettings;
 
         private HBAO volume;
 
@@ -84,11 +64,11 @@ namespace RoxamiRPCore
 
         public override void Configure(CommandBuffer commandBuffer, RenderTextureDescriptor cameraTextureDescriptor)
         {
-            if (m_HbaoSettings == null || !cs || kernel < 0) return;
+            if (m_HbaoSettings == null || volume == null || !cs || kernel < 0) return;
             
             hbaoDescriptor = cameraTextureDescriptor;
-            hbaoDescriptor.width = Mathf.Max(2, cameraTextureDescriptor.width >> m_HbaoSettings.downsample);
-            hbaoDescriptor.height = Mathf.Max(2, cameraTextureDescriptor.height >> m_HbaoSettings.downsample);
+            hbaoDescriptor.width = Mathf.Max(2, cameraTextureDescriptor.width >> volume.downsample.value);
+            hbaoDescriptor.height = Mathf.Max(2, cameraTextureDescriptor.height >> volume.downsample.value);
             hbaoDescriptor.colorFormat = RenderTextureFormat.RFloat;
             hbaoDescriptor.depthBufferBits = 0;
             hbaoDescriptor.enableRandomWrite = true;
@@ -123,17 +103,22 @@ namespace RoxamiRPCore
 
         void ComputeHBAO(RenderingData renderingData)
         {
-            cmd.SetGlobalFloat(hbaoDirectionalIntensityID, volume.directionalIntensity.value);
+            cmd.SetGlobalVector(hbaoGlobalParamsID, new Vector4(
+                volume.directionalIntensity.value, 
+                volume.inDirectionalIntensity.value
+                ));
+            
             var hbaoParams = new Vector4(
                 volume.intensity.value, 
                 volume.radius.value, 
                 volume.maxStepSize.value,
-                volume.angleBias.value);
+                volume.angleBias.value
+                );
             
             int width = hbaoDescriptor.width;
             int height = hbaoDescriptor.height;
 
-            cmd.SetRenderTarget(hbaoRT, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.DontCare);
+            cmd.SetRenderTarget(hbaoRT);
             
             cmd.SetComputeVectorParam(cs,
                 texelSizeID, new Vector4(width, height, 1f / width, 1f / height));
@@ -155,7 +140,7 @@ namespace RoxamiRPCore
 
         private void Blur(ScriptableRenderContext context, RenderingData renderingData)
         {
-            m_BlurRenderPass.Setup(cmd,hbaoRT, hbaoRT, m_BlurSettings, hbaoDescriptor);
+            m_BlurRenderPass.Setup(cmd, hbaoRT, hbaoRT, volume.blurSettings.value, hbaoDescriptor);
             m_BlurRenderPass.Execute(context, ref renderingData);
         }
 

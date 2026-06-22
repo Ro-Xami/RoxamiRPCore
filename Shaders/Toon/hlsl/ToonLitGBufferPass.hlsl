@@ -2,7 +2,7 @@
 #define ROXAMI_LIT_GBUFFER_PASS_INCLUDED
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-#include "Packages/roxamirpcore/Shaders/Core/RoxamiGBuffer.hlsl"
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/UnityGBuffer.hlsl"
 #if defined(LOD_FADE_CROSSFADE)
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
 #endif
@@ -72,10 +72,12 @@ inline void InitializeStandardLitSurfaceData(Varyings input, out SurfaceData out
     float2 uv = input.uv;
     
     half4 albedoAlpha = SampleAlbedoAlpha(uv, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap));
+    albedoAlpha = max(0, albedoAlpha);
+    
     outSurfaceData.alpha = Alpha(albedoAlpha.a, _BaseColor, _Cutoff);
 
     half4 specGloss = SampleMetallicSpecGloss(uv, albedoAlpha.a);
-    outSurfaceData.albedo = pow(albedoAlpha.rgb, _BasePower) * _BaseColor.rgb;
+    outSurfaceData.albedo = pow(albedoAlpha.rgb, max(HALF_MIN, _BasePower)) * _BaseColor.rgb;
     outSurfaceData.albedo = AlphaModulate(outSurfaceData.albedo, outSurfaceData.alpha);
     
 

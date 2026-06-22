@@ -111,9 +111,9 @@ namespace RoxamiRPCore
     public enum RoxamiToonDeferredPassInput
     {
         ToonLit,
-        ConvolutionOutline,
-        ClearStencil,
-        ClusteredDebug,
+        // ConvolutionOutline,
+        // ClearStencil,
+        // ClusteredDebug,
         RenderingDebug
     }
     

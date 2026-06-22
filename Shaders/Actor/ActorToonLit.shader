@@ -53,7 +53,7 @@ Shader "RoxamiRP/Actor/ActorToonLit"
         
         Pass
         {
-            Name "ActorFace"
+            Name "ActorForward"
             Tags
             {
                 "LightMode" = "ActorForward"

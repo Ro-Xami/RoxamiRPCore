@@ -5,18 +5,11 @@ using UnityEngine.Rendering.Universal;
 
 namespace RoxamiRPCore
 {
-    public enum VolumeLightingType
-    {
-        None,
-        RayMarching,
-        RadioBlur
-    }
-
     [Serializable]
     public class VolumeLightingRayMarchSettings
     {
         [Min(0f)] 
-        public float intensity = 1;
+        public float intensity = 0;
         
         [Min(0f)] 
         public float power = 1f;
@@ -42,44 +35,36 @@ namespace RoxamiRPCore
        public BlurSettings blurSettings = new BlurSettings();
     }
     
-    [Serializable]
-    public class VolumeLightingRadioBlurSettings
-    {
-        [Min(0f)] public float intensity = 1;
-        [Min(0)] public float clampMax = 10f;
-        [Range(0f, 2f)] public float threshold = 1.2f;
-    }
-    
-    [Serializable]
-    public class VolumeLightingTypeParameter : VolumeParameter<VolumeLightingType>
-    {
-        public VolumeLightingTypeParameter(VolumeLightingType value, bool overrideState = false) : base(value, overrideState) { }
-    }
-    
-    [Serializable]
-    public class VolumeLightingRayMarchModeParameter : VolumeParameter<VolumeLightingRayMarchSettings>
-    {
-        public VolumeLightingRayMarchModeParameter(VolumeLightingRayMarchSettings value, bool overrideState = false) : base(value, overrideState) { }
-    }
-    
-    [Serializable]
-    public class VolumeLightingRadioBlurModeParameter : VolumeParameter<VolumeLightingRadioBlurSettings>
-    {
-        public VolumeLightingRadioBlurModeParameter(VolumeLightingRadioBlurSettings value, bool overrideState = false) : base(value, overrideState) { }
-    }
-    
     [Serializable, VolumeComponentMenuForRenderPipeline("Roxami/VolumeLighting", typeof(UniversalRenderPipeline))]
     public class VolumeLighting : VolumeComponent, IPostProcessComponent
     {
-        public VolumeLightingTypeParameter type = new VolumeLightingTypeParameter(VolumeLightingType.None, false);
+        public MinFloatParameter density = new MinFloatParameter(1.0f, 0.0f);
         
-        public VolumeLightingRayMarchModeParameter rayMarchSettings = new VolumeLightingRayMarchModeParameter(new VolumeLightingRayMarchSettings());
+        public BoolParameter enableDirectionalLights = new BoolParameter(false);
         
-        public VolumeLightingRadioBlurModeParameter radioBlurSettings = new VolumeLightingRadioBlurModeParameter(new VolumeLightingRadioBlurSettings());
+        public BoolParameter enableAdditionalLights = new BoolParameter(false);
+        
+        // public ClampedFloatParameter additionalLightDistancePower = new ClampedFloatParameter(1f, 0f, 1f);
+        
+        // public MinFloatParameter fadeStart = new MinFloatParameter(0f, 0f, true);
+        //
+        // public MinFloatParameter fadeLength = new MinFloatParameter(1f, 0f);
+
+        public ClampedIntParameter downSample = new ClampedIntParameter(1, 0, 4);
+
+        public MinIntParameter maxStep = new MinIntParameter(100, 0);
+
+        public ClampedFloatParameter stepSize = new ClampedFloatParameter(0.1f, 0.0f, 0.1f);
+
+        public MinFloatParameter maxRayLength = new MinFloatParameter(100f, 0f);
+
+        public ClampedFloatParameter randomStrength = new ClampedFloatParameter(1f, 0.0f, 100f);
+        
+        public RoxamiBlurVolumeSettings blurSettings = new RoxamiBlurVolumeSettings(new BlurSettings());
 
         public bool IsActive()
         {
-            return type.value != VolumeLightingType.None;
+            return density.value > 0f && (enableDirectionalLights.value || enableAdditionalLights.value);
         }
 
         public bool IsTileCompatible() => false;

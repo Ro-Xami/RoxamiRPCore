@@ -1,20 +1,36 @@
 #pragma kernel VolumeLightingRayMarch
 
-#pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
-#pragma multi_compile _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
+#define _CLUSTERED_LIGHTING
+#pragma multi_compile_fragment _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE//_MAIN_LIGHT_SHADOWS_SCREEN
+#define _ADDITIONAL_LIGHT_SHADOWS
+#define _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
+
+#pragma multi_compile _ _DIRECTIONAL_VOLUME_LIGHT
+#pragma multi_compile _ _ADDITIONAL_VOLUME_LIGHTS
 
 #include "Packages/roxamirpcore/Shaders/Core/Common.hlsl"
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Input.hlsl"
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
-RWTexture2D<float> _VolumeLightingTexture;
+RWTexture2D<half3> _VolumeLightingTexture;
 
 float4 _texelSize;
+
 float4 _volumeLightingParams;
 #define _stepSize _volumeLightingParams.x
 #define _maxStep _volumeLightingParams.y
 #define _maxRayLength _volumeLightingParams.z
 #define _randomStrength _volumeLightingParams.w
+
+half _VolumeAdditionalLightDistancePower;
+
+half _VolumeLightingDensity;
+
+float4 _VolumeLightingFade;
+#define _fadeStart _VolumeLightingFade.x
+#define _fadeLength _VolumeLightingFade.y
 
 // Generate random value between -1 and 1
 float Random(uint2 id)
@@ -28,6 +44,80 @@ float SampleShadow(float3 positionWS)
     return MainLightRealtimeShadow(shadowCoord);
 }
 
+// Matches Unity Vanilla HINT_NICE_QUALITY attenuation
+// Attenuation smoothly decreases to light range.
+float m_DistanceAttenuation(float distanceSqr, half2 distanceAttenuation)
+{
+    // We use a shared distance attenuation for additional directional and puctual lights
+    // for directional lights attenuation will be 1
+    float lightAtten = rcp(distanceSqr);
+    float2 distanceAttenuationFloat = float2(distanceAttenuation);
+
+    // Use the smoothing factor also used in the Unity lightmapper.
+    half factor = half(pow(distanceSqr * distanceAttenuationFloat.x, max(HALF_MIN, _VolumeAdditionalLightDistancePower)));
+    half smoothFactor = saturate(half(1.0) - factor * factor);
+    smoothFactor = smoothFactor * smoothFactor;
+
+    return lightAtten * smoothFactor;
+}
+
+// Fills a light struct given a perObjectLightIndex
+Light m_GetAdditionalPerObjectLight(int perObjectLightIndex, float3 positionWS)
+{
+    // Abstraction over Light input constants
+    #if USE_STRUCTURED_BUFFER_FOR_LIGHT_DATA
+    float4 lightPositionWS = _AdditionalLightsBuffer[perObjectLightIndex].position;
+    half3 color = _AdditionalLightsBuffer[perObjectLightIndex].color.rgb;
+    half4 distanceAndSpotAttenuation = _AdditionalLightsBuffer[perObjectLightIndex].attenuation;
+    half4 spotDirection = _AdditionalLightsBuffer[perObjectLightIndex].spotDirection;
+    uint lightLayerMask = _AdditionalLightsBuffer[perObjectLightIndex].layerMask;
+    #else
+    float4 lightPositionWS = _AdditionalLightsPosition[perObjectLightIndex];
+    half3 color = _AdditionalLightsColor[perObjectLightIndex].rgb;
+    half4 distanceAndSpotAttenuation = _AdditionalLightsAttenuation[perObjectLightIndex];
+    half4 spotDirection = _AdditionalLightsSpotDir[perObjectLightIndex];
+    uint lightLayerMask = asuint(_AdditionalLightsLayerMasks[perObjectLightIndex]);
+    #endif
+
+    // Directional lights store direction in lightPosition.xyz and have .w set to 0.0.
+    // This way the following code will work for both directional and punctual lights.
+    float3 lightVector = lightPositionWS.xyz - positionWS * lightPositionWS.w;
+    float distanceSqr = max(dot(lightVector, lightVector), HALF_MIN);
+
+    half3 lightDirection = half3(lightVector * rsqrt(distanceSqr));
+    // full-float precision required on some platforms
+    float attenuation = m_DistanceAttenuation(distanceSqr, distanceAndSpotAttenuation.xy) * AngleAttenuation(spotDirection.xyz, lightDirection, distanceAndSpotAttenuation.zw);
+
+    Light light;
+    light.direction = lightDirection;
+    light.distanceAttenuation = attenuation;
+    light.shadowAttenuation = 1.0; // This value can later be overridden in GetAdditionalLight(uint i, float3 positionWS, half4 shadowMask)
+    light.color = color;
+    light.layerMask = lightLayerMask;
+
+    return light;
+}
+
+Light m_GetAdditionalLight(uint i, float3 positionWS)
+{
+    #if USE_CLUSTERED_LIGHTING
+    int lightIndex = i;
+    #else
+    int lightIndex = GetPerObjectLightIndex(i);
+    #endif
+    return m_GetAdditionalPerObjectLight(lightIndex, positionWS);
+}
+
+float3 GetVolumeAdditonalLightColor(int lightIndex, float3 positionWS)
+{
+    Light light = GetAdditionalLight(lightIndex, positionWS);
+    half4 shadowMask = 0;
+    half4 occlusionProbeChannels = 0;
+    light.shadowAttenuation = AdditionalLightShadow(lightIndex, positionWS, light.direction, shadowMask, occlusionProbeChannels);
+
+    return light.color * light.shadowAttenuation * min(light.distanceAttenuation, 5);
+}
+
 [numthreads(8,8,1)]
 void VolumeLightingRayMarch (uint3 id : SV_DispatchThreadID)
 {
@@ -35,17 +125,9 @@ void VolumeLightingRayMarch (uint3 id : SV_DispatchThreadID)
     {
         return;
     }
-    float2 screenSpaceUV = id.xy * _texelSize.zw;
     
+    float2 screenSpaceUV = id.xy * _texelSize.zw;
     float depth = _CameraDepthTexture.SampleLevel(sampler_CameraDepthTexture, screenSpaceUV, 1).x;
-
-    bool isSkybox = false;
-    GetReverseDepthWithSkybox(depth, isSkybox);
-    if (isSkybox)
-    {
-        _VolumeLightingTexture[id.xy] = 1;
-        return;
-    }
     
     float3 positionWS = CalculateDepthToPositionWS(depth, screenSpaceUV);
     float3 cameraWS = _WorldSpaceCameraPos.xyz;
@@ -53,10 +135,21 @@ void VolumeLightingRayMarch (uint3 id : SV_DispatchThreadID)
     
     float3 rayDir = normalize(rayVec);
     float3 rayStart = cameraWS;
+    // rayStart += _fadeStart * rayDir;
     float rayMaxLength = min(length(positionWS - cameraWS), _maxRayLength);
-    float volumeLighting = 0;
-    float rayLength = 0;
     
+    #ifdef _DIRECTIONAL_VOLUME_LIGHT
+        Light mainLight = GetMainLight();
+        half3 lightColor = mainLight.color;
+    #endif
+
+    float rayLength = 0;
+    float3 volumeLightingColor = 0;
+
+    InputData inputData = (InputData) 0;
+    inputData.normalizedScreenSpaceUV = screenSpaceUV;
+    inputData.positionWS = rayStart;
+
     UNITY_LOOP
     for(int j = 0 ; j < _maxStep ; j++)
     {
@@ -67,6 +160,7 @@ void VolumeLightingRayMarch (uint3 id : SV_DispatchThreadID)
         }
         
         float3 rayPositionWS = rayStart + rayDir * rayLength;
+        inputData.positionWS = rayPositionWS;
         
         // Add random jittering in three directions
         if (_randomStrength > 0)
@@ -80,10 +174,29 @@ void VolumeLightingRayMarch (uint3 id : SV_DispatchThreadID)
             
             rayPositionWS += randomOffset;
         }
+        
+        half3 lighting = 0;
 
-        volumeLighting += SampleShadow(rayPositionWS);
+        #ifdef _DIRECTIONAL_VOLUME_LIGHT
+            lighting += SampleShadow(rayPositionWS) * lightColor;
+        #endif
+
+        #if USE_CLUSTERED_LIGHTING
+        for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
+        {
+            lighting += GetVolumeAdditonalLightColor(lightIndex, rayPositionWS);
+        }
+        #endif
+
+        uint pixelLightCount = GetAdditionalLightsCount();
+        LIGHT_LOOP_BEGIN(pixelLightCount)
+            lighting += GetVolumeAdditonalLightColor(lightIndex, rayPositionWS);
+        LIGHT_LOOP_END
+        
+        volumeLightingColor += lighting;
     }
-    volumeLighting /= _maxStep;
     
-    _VolumeLightingTexture[id.xy] = volumeLighting;
+    volumeLightingColor /= _maxStep;
+    
+    _VolumeLightingTexture[id.xy] = volumeLightingColor * _VolumeLightingDensity;
 }

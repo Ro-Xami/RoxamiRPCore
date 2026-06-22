@@ -2,14 +2,13 @@
 #define ROXAMI_ACTOR_GBUFFER_PASS_INCLUDED
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-#include "Packages/roxamirpcore/Shaders/Core/RoxamiGBuffer.hlsl"
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/UnityGBuffer.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 #if defined(LOD_FADE_CROSSFADE)
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/LODCrossFade.hlsl"
 #endif
 
 #include "Packages/roxamirpcore/Shaders/Actor/hlsl/ActorToonInput.hlsl"
-#include "Packages/roxamirpcore/Shaders/Core/ClusteredLightingCore.hlsl"
 
 #define _RoxamiF0 0.04f
 
@@ -214,7 +213,7 @@ half4 ActorFaceForwardFragment(Varyings input) : SV_Target
     
     Light mainLight = GetMainLight();
     half NdotL = SDF_NoL(input.uv, mainLight.direction);
-    half3 toonNdotL = SAMPLE_TEXTURE2D(_ActorLut, sampler_ActorLut, half2(NdotL.x, 0));
+    half3 toonNdotL = SAMPLE_TEXTURE2D(_ActorLut, sampler_ActorLut, half2(NdotL.x, 0)).rgb;
 
     half rim = DepthRim(inputData) * step(0.5, NdotL);
     
@@ -254,6 +253,50 @@ half4 ActorToonForwardFragment(Varyings input) : SV_Target
     return half4(color, 1);
 }
 
+half3 ActorAdditionalLightingColor(Light light)
+{
+    return light.color.rgb * light.distanceAttenuation * light.shadowAttenuation;
+}
+
+half3 ActorAdditionalLightingColor(InputData inputData)
+{
+    half3 additionalLightsColor = 0;
+    half4 shadowMask = 0;
+    
+    // #if defined(_ADDITIONAL_LIGHTS)
+    uint pixelLightCount = GetAdditionalLightsCount();
+
+    #if USE_CLUSTERED_LIGHTING
+    for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
+    {
+        FORWARD_PLUS_SUBTRACTIVE_LIGHT_CHECK
+
+        Light light = GetAdditionalLight(lightIndex, inputData.positionWS, shadowMask);
+
+        #ifdef _LIGHT_LAYERS
+        if (IsMatchingLightLayer(light.layerMask, meshRenderingLayers))
+            #endif
+        {
+            additionalLightsColor += ActorAdditionalLightingColor(light);
+        }
+    }
+    #endif
+
+    LIGHT_LOOP_BEGIN(pixelLightCount)
+        Light light = GetAdditionalLight(lightIndex, inputData.positionWS, shadowMask);
+
+    #ifdef _LIGHT_LAYERS
+    if (IsMatchingLightLayer(light.layerMask, meshRenderingLayers))
+        #endif
+    {
+        additionalLightsColor += ActorAdditionalLightingColor(light);
+    }
+    LIGHT_LOOP_END
+    // #endif
+    
+    return additionalLightsColor;
+}
+
 half4 ActorToon2DForwardFragment(Varyings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);
@@ -269,23 +312,15 @@ half4 ActorToon2DForwardFragment(Varyings input) : SV_Target
     InputData inputData;
     InitializeInputData(input, surfaceData.normalTS, inputData);
     
-    // BRDFData brdfData;
-    // InitializeBRDFData(surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.alpha, brdfData);
-    
     Light mainLight = GetMainLight();
-    //half NdotL = saturate(dot(mainLight.direction, inputData.normalWS));
-    //half3 spec = _RoxamiF0 * DirectBRDFSpecular(brdfData, inputData.normalWS, mainLight.direction, inputData.viewDirectionWS);
     
-    half3 additionalLightColor = 
-        GetClusteredLightingDistanceAttenuation(
-            inputData.normalizedScreenSpaceUV, 
-            input.positionCS.z / input.positionCS.w,
-            inputData.positionWS
-            );
-    
+    half3 additionalLightColor = ActorAdditionalLightingColor(inputData);
+
     half4 color = 0;
-    color.rgb += max(mainLight.color, 0.35f) * surfaceData.albedo.rgb;
-    color.rgb += additionalLightColor * surfaceData.albedo.rgb;
+    color.rgb += max(mainLight.color, 0.35f);
+    color.rgb += additionalLightColor;
+    color.rgb += inputData.bakedGI;
+    color.rgb *= surfaceData.albedo.rgb;
     color.a = surfaceData.alpha;
     
     return color;

@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7fd9488000d3734a9e00ee676215985, type: 3}
+  m_Name: Global Volume Profile
+  m_EditorClassIdentifier: 
+  components:
+  - {fileID: 438396587636462888}
+--- !u!114 &438396587636462888
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d87d8a6d4c3543cb9f5dc61bc02e9e84, type: 3}
+  m_Name: VolumeLighting
+  m_EditorClassIdentifier: 
+  active: 1
+  density:
+    m_OverrideState: 1
+    m_Value: 1
+  enableDirectionalLights:
+    m_OverrideState: 1
+    m_Value: 0
+  enableAdditionalLights:
+    m_OverrideState: 1
+    m_Value: 1
+  downSample:
+    m_OverrideState: 1
+    m_Value: 1
+  maxStep:
+    m_OverrideState: 1
+    m_Value: 200
+  stepSize:
+    m_OverrideState: 1
+    m_Value: 0.0019
+  maxRayLength:
+    m_OverrideState: 1
+    m_Value: 200
+  randomStrength:
+    m_OverrideState: 1
+    m_Value: 7.8
+  blurSettings:
+    m_OverrideState: 1
+    m_Value:
+      blurType: 0
+      blurRadios: 1
+      iterations: 1
+      downSample: 0

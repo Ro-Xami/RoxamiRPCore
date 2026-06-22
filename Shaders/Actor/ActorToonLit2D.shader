@@ -56,7 +56,7 @@ Shader "RoxamiRP/Actor/ActorToonLit2D"
             Name "ActorFace"
             Tags
             {
-                "LightMode" = "ActorForward"
+                "LightMode" = "UniversalForwardOnly"
             }
             
             ZWrite Off
@@ -85,6 +85,9 @@ Shader "RoxamiRP/Actor/ActorToonLit2D"
             // Unity defined keywords
             #pragma multi_compile_fragment _ LOD_FADE_CROSSFADE
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
+            
+            #pragma multi_compile _ _LIGHT_LAYERS
+            #pragma multi_compile _ _CLUSTERED_LIGHTING
 
             //--------------------------------------
             // GPU Instancing
